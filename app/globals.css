@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #070a12;
+  color: #e5edf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(20, 184, 166, 0.16), transparent 34rem),
+    radial-gradient(circle at 86% 10%, rgba(99, 102, 241, 0.12), transparent 28rem),
+    linear-gradient(180deg, #070a12 0%, #0b1020 48%, #070a12 100%);
+  color: #e5edf8;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: #2dd4bf;
+  color: #020617;
+}
+
+@layer utilities {
+  .bg-paper {
+    background:
+      radial-gradient(circle at 50% -10%, rgba(45, 212, 191, 0.12), transparent 30rem),
+      #070a12 !important;
+  }
+
+  .bg-white {
+    background: rgba(15, 23, 42, 0.74) !important;
+    backdrop-filter: blur(18px);
+  }
+
+  .bg-slate-50 {
+    background: rgba(15, 23, 42, 0.62) !important;
+  }
+
+  .bg-slate-950 {
+    background: linear-gradient(135deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.92)) !important;
+  }
+
+  .bg-teal-50 {
+    background: rgba(20, 184, 166, 0.12) !important;
+  }
+
+  .bg-amber-50 {
+    background: rgba(245, 158, 11, 0.12) !important;
+  }
+
+  .text-ink,
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-slate-700 {
+    color: #eef6ff !important;
+  }
+
+  .text-slate-600,
+  .text-slate-500 {
+    color: #9fb0c9 !important;
+  }
+
+  .text-slate-400,
+  .text-slate-300 {
+    color: #b8c6dc !important;
+  }
+
+  .text-marine {
+    color: #5eead4 !important;
+  }
+
+  .text-teal-950,
+  .text-amber-900 {
+    color: #dffcf7 !important;
+  }
+
+  .border-line,
+  .border-slate-200,
+  .border-teal-100,
+  .border-amber-100 {
+    border-color: rgba(148, 163, 184, 0.18) !important;
+  }
+
+  .shadow-sm,
+  .shadow-soft {
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.26), 0 0 32px rgba(45, 212, 191, 0.04) !important;
+  }
+
+  input,
+  textarea,
+  select {
+    background: rgba(2, 6, 23, 0.42);
+    color: #eef6ff;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+  }
+
+  button,
+  a {
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, opacity 180ms ease;
+  }
+
+  button:hover,
+  a:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

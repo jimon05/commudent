@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FormFlow MVP</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --bg: #f4f7f5;
+      --surface: #ffffff;
+      --surface-2: #eef3f8;
+      --ink: #18202a;
+      --muted: #657181;
+      --line: #d9e0e7;
+      --blue: #2563eb;
+      --blue-dark: #1d4ed8;
+      --green: #16866f;
+      --red: #c24134;
+      --yellow: #b9851d;
+      --violet: #7654c4;
+      --shadow: 0 18px 45px rgba(24, 32, 42, 0.1);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 26%),
+        linear-gradient(315deg, rgba(22, 134, 111, 0.09), transparent 30%),
+        var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      border-bottom: 1px solid rgba(217, 224, 231, 0.86);
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar {
+      width: min(1440px, calc(100% - 32px));
+      height: 64px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 210px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      font-weight: 900;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    main {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 18px 0 28px;
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 390px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      min-height: 54px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(250, 252, 253, 0.86);
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .workspace {
+      display: grid;
+      gap: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+    }
+
+    input, select {
+      height: 40px;
+      padding: 0 10px;
+    }
+
+    textarea {
+      min-height: 84px;
+      padding: 10px;
+      resize: vertical;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: rgba(37, 99, 235, 0.72);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .btn:hover {
+      border-color: #b8c2ce;
+      background: #f8fafc;
+    }
+
+    .btn.primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .btn.primary:hover {
+      border-color: var(--blue-dark);
+      background: var(--blue-dark);
+    }
+
+    .btn.danger {
+      border-color: rgba(194, 65, 52, 0.36);
+      color: var(--red);
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .flow-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .flow-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .flow-item.active {
+      border-color: rgba(37, 99, 235, 0.68);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.11);
+    }
+
+    .flow-item strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .flow-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .flow-item.screenout {
+      border-color: rgba(194, 65, 52, 0.28);
+      background: #fff8f7;
+    }
+
+    .flow-item.meta {
+      border-color: rgba(22, 134, 111, 0.28);
+      background: #f6fffc;
+    }
+
+    .question-editor {
+      display: grid;
+      gap: 14px;
+    }
+
+    .editor-head {
+      display: grid;
+      grid-template-columns: 1fr 160px 112px;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .option-table {
+      display: grid;
+      gap: 8px;
+    }
+
+    .option-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) 148px 112px 38px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .option-row.no-branch {
+      grid-template-columns: minmax(120px, 1fr) 112px 38px;
+    }
+
+    .mini-toggle {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 8px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .mini-toggle input {
+      width: 14px;
+      height: 14px;
+      box-shadow: none;
+    }
+
+    .flow-map {
+      position: relative;
+      min-height: 360px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(#edf2f7 1px, transparent 1px),
+        linear-gradient(90deg, #edf2f7 1px, transparent 1px),
+        #fbfdff;
+      background-size: 24px 24px;
+    }
+
+    .flow-map-canvas {
+      position: relative;
+      min-width: 0;
+      min-height: 360px;
+      padding: 24px;
+    }
+
+    .flow-arrows {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .flow-arrow-line {
+      pointer-events: none;
+    }
+
+    .arrow-controls {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .arrow-labels {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .arrow-end {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border: 3px solid var(--blue);
+      border-radius: 999px;
+      background: #ffffff;
+      pointer-events: auto;
+      cursor: grab;
+      transform: translate(-50%, -50%);
+      filter: drop-shadow(0 2px 5px rgba(37, 99, 235, 0.32));
+    }
+
+    .arrow-end:active {
+      cursor: grabbing;
+    }
+
+    .map-board {
+      position: relative;
+      z-index: 1;
+    }
+
+    .map-node {
+      position: absolute;
+      width: 260px;
+      border: 1px solid #cfd8e3;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 12px 28px rgba(24, 32, 42, 0.08);
+      overflow: hidden;
+    }
+
+    .map-node.active,
+    .map-node.drop-ready {
+      border-color: rgba(37, 99, 235, 0.7);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), 0 12px 28px rgba(24, 32, 42, 0.08);
+    }
+
+    .map-node.terminal {
+      background: #fff8f7;
+      border-color: rgba(194, 65, 52, 0.3);
+    }
+
+    .map-node.submit {
+      background: #f6fffc;
+      border-color: rgba(22, 134, 111, 0.28);
+    }
+
+    .map-node-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 3px;
+    }
+
+    .map-node-head strong {
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .map-node-head span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .map-options {
+      display: grid;
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .map-option {
+      min-height: 34px;
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px;
+      background: #fff;
+      color: #344052;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .map-option.branch-source {
+      border-color: rgba(37, 99, 235, 0.34);
+      background: #f8fbff;
+    }
+
+    .connector-handle {
+      width: 10px;
+      height: 10px;
+      border: 2px solid rgba(37, 99, 235, 0.65);
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.12);
+    }
+
+    .map-option small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .branch-label {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border: 1px solid rgba(37, 99, 235, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #1e4fc2;
+      font-size: 12px;
+      font-weight: 900;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 4px 10px rgba(24, 32, 42, 0.08);
+    }
+
+    .map-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    body.is-connecting {
+      cursor: crosshair;
+    }
+
+    .form-control-preview {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px 12px;
+      color: var(--muted);
+      background: #f8fafc;
+      font-size: 13px;
+    }
+
+    .scale-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .next-page-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .is-hidden {
+      display: none;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 2px;
+    }
+
+    .section-title h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .lang-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .lang-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 10px;
+    }
+
+    .lang-card strong {
+      font-size: 13px;
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .switch-row input {
+      width: 16px;
+      height: 16px;
+      box-shadow: none;
+    }
+
+    .insight-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .insight {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--green);
+      border-radius: 7px;
+      padding: 10px;
+      background: #fff;
+      color: #344052;
+      font-size: 13px;
+    }
+
+    .insight.warn {
+      border-left-color: var(--yellow);
+    }
+
+    .insight.error {
+      border-left-color: var(--red);
+    }
+
+    .preview {
+      display: grid;
+      gap: 12px;
+    }
+
+    .phone {
+      border: 1px solid #cfd8e3;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .phone-top {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 12px;
+      background: #18202a;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .form-preview {
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+      min-height: 330px;
+    }
+
+    .preview-title {
+      border-top: 7px solid var(--blue);
+      border-radius: 7px;
+      padding: 12px;
+      background: var(--surface-2);
+    }
+
+    .preview-title h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+
+    .preview-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .preview-question {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .choice {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #344052;
+      font-size: 13px;
+    }
+
+    .radio-dot {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #aeb8c4;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .export-box {
+      display: grid;
+      gap: 10px;
+    }
+
+    .code-output {
+      width: 100%;
+      min-height: 240px;
+      max-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 12px;
+      background: #10151d;
+      color: #d9e6f2;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+    }
+
+    .tab {
+      min-height: 34px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .tab.active {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 6px 16px rgba(24, 32, 42, 0.08);
+    }
+
+    .google-export {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .google-export .button-row {
+      align-items: stretch;
+    }
+
+    .google-export .btn {
+      flex: 1 1 auto;
+    }
+
+    .export-status {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .export-status.error {
+      color: var(--red);
+    }
+
+    .export-status.success {
+      color: var(--green);
+    }
+
+    .export-result {
+      display: none;
+      gap: 7px;
+      padding: 10px;
+      border: 1px solid rgba(22, 134, 111, 0.28);
+      border-radius: 7px;
+      background: rgba(22, 134, 111, 0.07);
+      font-size: 12px;
+    }
+
+    .export-result.is-visible {
+      display: grid;
+    }
+
+    .export-result a {
+      color: var(--blue-dark);
+      font-weight: 850;
+      text-decoration: none;
+    }
+
+    .tiny {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .empty {
+      border: 1px dashed #bdc7d2;
+      border-radius: 7px;
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1160px) {
+      main {
+        grid-template-columns: 240px minmax(420px, 1fr);
+      }
+
+      .right-rail {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 800px) {
+      .topbar {
+        height: auto;
+        padding: 12px 0;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      main {
+        width: min(100% - 20px, 720px);
+        grid-template-columns: 1fr;
+      }
+
+      .meta-grid,
+      .editor-head,
+      .lang-grid,
+      .option-row,
+      .next-page-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-mark">FF</div>
+          <div>
+            <strong>FormFlow MVP</strong>
+            <span>스크리닝 설문 자동 제작기</span>
+          </div>
+        </div>
+        <div class="status-strip" id="statusStrip"></div>
+      </div>
+    </header>
+
+    <main>
+      <aside class="panel">
+        <div class="panel-header">
+          <h2>설문 흐름</h2>
+          <button class="icon-btn" id="addQuestionBtn" title="질문 추가">+</button>
+        </div>
+        <div class="panel-body">
+          <div class="flow-list" id="flowList"></div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <section class="panel" id="metaPanel">
+          <div class="panel-header">
+            <h2>기본 정보</h2>
+            <div class="button-row">
+              <button class="btn" id="loadSampleBtn">샘플</button>
+              <button class="btn primary" id="copyScriptBtn">Apps Script 복사</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="meta-grid">
+              <label>
+                설문 제목
+                <input id="surveyTitle" type="text">
+              </label>
+              <label>
+                기준 언어
+                <select id="baseLanguage">
+                  <option value="ko">한국어</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+            </div>
+            <label style="margin-top: 12px;">
+              설명
+              <textarea id="surveyDescription"></textarea>
+            </label>
+            <div class="section-title">
+              <h3>생성 언어</h3>
+              <span class="tiny">PoC 번역은 내장 사전 + 보수적 자동 치환으로 미리보기합니다.</span>
+            </div>
+            <div class="lang-grid" id="languageGrid"></div>
+          </div>
+        </section>
+
+        <section class="panel" id="questionPanel">
+          <div class="panel-header">
+            <h2>질문 편집</h2>
+            <div class="button-row">
+              <button class="btn" id="duplicateQuestionBtn">복제</button>
+              <button class="btn danger" id="deleteQuestionBtn">삭제</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="questionEditor" class="question-editor"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>분기 맵</h2>
+            <span class="tiny">화살표 끝의 파란 점을 질문, 완료, 탈락 노드로 이동</span>
+          </div>
+          <div class="panel-body">
+            <div class="flow-map" id="flowMap"></div>
+            <div class="map-note">화살표 끝의 큰 파란 점을 직접 드래그하거나, 파란 점을 클릭한 뒤 대상 노드를 클릭하세요.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>로직 점검</h2>
+            <span class="tiny">탈락/완료/누락 분기를 자동 확인</span>
+          </div>
+          <div class="panel-body">
+            <div class="insight-list" id="insightList"></div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="right-rail workspace">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>응답자 미리보기</h2>
+            <select id="previewLanguage" style="max-width: 132px;">
+              <option value="ko">한국어</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+            </select>
+          </div>
+          <div class="panel-body preview">
+            <div class="phone">
+              <div class="phone-top">
+                <span>Google Forms Preview</span>
+                <span id="previewProgress"></span>
+              </div>
+              <div class="form-preview" id="formPreview"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>내보내기</h2>
+          </div>
+          <div class="panel-body export-box">
+            <div class="google-export">
+              <label>
+                Google OAuth Client ID
+                <input id="googleClientId" type="text" placeholder="1234567890-xxxx.apps.googleusercontent.com">
+              </label>
+              <div class="button-row">
+                <button class="btn" id="saveClientIdBtn">Client ID 저장</button>
+                <button class="btn primary" id="googleExportBtn">Google Form으로 내보내기</button>
+              </div>
+              <div class="export-status" id="googleExportStatus">Google Cloud에서 Forms API를 활성화하고 Web OAuth Client ID를 넣으면 바로 생성할 수 있습니다.</div>
+              <div class="export-result" id="googleExportResult"></div>
+            </div>
+            <div class="tabs">
+              <button class="tab active" data-export="script">Apps Script</button>
+              <button class="tab" data-export="json">JSON</button>
+            </div>
+            <pre class="code-output" id="exportOutput"></pre>
+            <p class="tiny">Apps Script는 Google Drive에서 새 Apps Script 프로젝트를 만들고 붙여넣어 실행하는 PoC용입니다. 제품화 단계에서는 동일한 구조를 Google Forms API 서버에서 실행하면 됩니다.</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const languages = [
+      { code: "ko", label: "한국어" },
+      { code: "en", label: "English" },
+      { code: "ja", label: "日本語" }
+    ];
+
+    const terminalTargets = [
+      { id: "continue", label: "다음 질문" },
+      { id: "screenout", label: "탈락 처리" },
+      { id: "submit", label: "완료 제출" }
+    ];
+
+    const questionTypes = [
+      { value: "short_answer", label: "단답형", kind: "text" },
+      { value: "paragraph", label: "장문형", kind: "text" },
+      { value: "radio", label: "객관식", kind: "branch" },
+      { value: "checkbox", label: "복수선택", kind: "choice" },
+      { value: "select", label: "드롭다운", kind: "branch" },
+      { value: "linear_scale", label: "선형 배율", kind: "scale" },
+      { value: "multiple_choice_grid", label: "객관식 그리드", kind: "choice" },
+      { value: "checkbox_grid", label: "체크박스 그리드", kind: "choice" },
+      { value: "file_upload", label: "파일 업로드", kind: "text" },
+      { value: "date", label: "날짜", kind: "text" },
+      { value: "time", label: "시간", kind: "text" }
+    ];
+
+    const translationMemory = {
+      "커피 소비자 스크리닝": {
+        en: "Coffee Consumer Screening",
+        ja: "コーヒー消費者スクリーニング"
+      },
+      "신제품 커피 리서치 참여자를 선별하기 위한 짧은 설문입니다.": {
+        en: "A short survey to screen participants for new coffee product research.",
+        ja: "新しいコーヒー製品調査の参加者を選定するための短いアンケートです。"
+      },
+      "만 19세 이상인가요?": {
+        en: "Are you 19 or older?",
+        ja: "19歳以上ですか？"
+      },
+      "최근 3개월 내 커피를 구매한 적이 있나요?": {
+        en: "Have you purchased coffee in the last 3 months?",
+        ja: "直近3か月以内にコーヒーを購入しましたか？"
+      },
+      "주로 어디에서 커피를 구매하나요?": {
+        en: "Where do you usually buy coffee?",
+        ja: "主にどこでコーヒーを購入しますか？"
+      },
+      "예": { en: "Yes", ja: "はい" },
+      "아니오": { en: "No", ja: "いいえ" },
+      "카페": { en: "Cafe", ja: "カフェ" },
+      "편의점": { en: "Convenience store", ja: "コンビニ" },
+      "온라인": { en: "Online", ja: "オンライン" },
+      "기타": { en: "Other", ja: "その他" }
+    };
+
+    const state = {
+      activePage: "meta",
+      activeQuestionId: "q1",
+      exportMode: "script",
+      accessToken: null,
+      pendingConnector: null,
+      draggingArrow: null,
+      survey: {
+        title: "커피 소비자 스크리닝",
+        description: "신제품 커피 리서치 참여자를 선별하기 위한 짧은 설문입니다.",
+        baseLanguage: "ko",
+        languages: ["ko", "en", "ja"],
+        questions: [
+          {
+            id: "q1",
+            type: "radio",
+            required: true,
+            text: "만 19세 이상인가요?",
+            options: [
+              { id: "o1", label: "예", next: "q2" },
+              { id: "o2", label: "아니오", next: "screenout" }
+            ]
+          },
+          {
+            id: "q2",
+            type: "radio",
+            required: true,
+            text: "최근 3개월 내 커피를 구매한 적이 있나요?",
+            options: [
+              { id: "o1", label: "예", next: "q3" },
+              { id: "o2", label: "아니오", next: "screenout" }
+            ]
+          },
+          {
+            id: "q3",
+            type: "radio",
+            required: true,
+            text: "주로 어디에서 커피를 구매하나요?",
+            options: [
+              { id: "o1", label: "카페", next: "submit" },
+              { id: "o2", label: "편의점", next: "submit" },
+              { id: "o3", label: "온라인", next: "submit" },
+              { id: "o4", label: "기타", next: "submit" }
+            ]
+          }
+        ]
+      }
+    };
+
+    const els = {
+      statusStrip: document.querySelector("#statusStrip"),
+      flowList: document.querySelector("#flowList"),
+      languageGrid: document.querySelector("#languageGrid"),
+      questionEditor: document.querySelector("#questionEditor"),
+      flowMap: document.querySelector("#flowMap"),
+      insightList: document.querySelector("#insightList"),
+      formPreview: document.querySelector("#formPreview"),
+      exportOutput: document.querySelector("#exportOutput"),
+      surveyTitle: document.querySelector("#surveyTitle"),
+      surveyDescription: document.querySelector("#surveyDescription"),
+      baseLanguage: document.querySelector("#baseLanguage"),
+      previewLanguage: document.querySelector("#previewLanguage"),
+      previewProgress: document.querySelector("#previewProgress"),
+      googleClientId: document.querySelector("#googleClientId"),
+      googleExportBtn: document.querySelector("#googleExportBtn"),
+      saveClientIdBtn: document.querySelector("#saveClientIdBtn"),
+      googleExportStatus: document.querySelector("#googleExportStatus"),
+      googleExportResult: document.querySelector("#googleExportResult"),
+      metaPanel: document.querySelector("#metaPanel"),
+      questionPanel: document.querySelector("#questionPanel")
+    };
+
+    function uid(prefix) {
+      return `${prefix}${Math.random().toString(36).slice(2, 7)}`;
+    }
+
+    function activeQuestion() {
+      return state.survey.questions.find((question) => question.id === state.activeQuestionId)
+        || state.survey.questions[0];
+    }
+
+    function currentQuestionType(question = activeQuestion()) {
+      return questionTypes.find((type) => type.value === question?.type) || questionTypes[2];
+    }
+
+    function supportsBranching(question = activeQuestion()) {
+      return currentQuestionType(question).kind === "branch";
+    }
+
+    function supportsChoices(question = activeQuestion()) {
+      return ["branch", "choice"].includes(currentQuestionType(question).kind);
+    }
+
+    function supportsOtherInput(question = activeQuestion()) {
+      return ["radio", "checkbox"].includes(question?.type);
+    }
+
+    function questionIndex(id) {
+      return state.survey.questions.findIndex((question) => question.id === id);
+    }
+
+    function questionIndexIn(survey, id) {
+      return survey.questions.findIndex((question) => question.id === id);
+    }
+
+    function nextQuestionId(currentId) {
+      const index = questionIndex(currentId);
+      return state.survey.questions[index + 1]?.id || "submit";
+    }
+
+    function nextQuestionIdIn(survey, currentId) {
+      const index = questionIndexIn(survey, currentId);
+      return survey.questions[index + 1]?.id || "submit";
+    }
+
+    function questionNextTarget(question) {
+      return question.nextPage || nextQuestionId(question.id);
+    }
+
+    function questionNextTargetIn(survey, question) {
+      return question.nextPage || nextQuestionIdIn(survey, question.id);
+    }
+
+    function translate(text, lang) {
+      if (lang === state.survey.baseLanguage) return text;
+      if (translationMemory[text]?.[lang]) return translationMemory[text][lang];
+      const prefix = lang === "en" ? "[EN draft]" : lang === "ja" ? "[JA draft]" : `[${lang}]`;
+      return `${prefix} ${text}`;
+    }
+
+    function localizedSurvey(lang) {
+      return {
+        baseLanguage: lang,
+        languages: [lang],
+        exportLanguage: lang,
+        title: translate(state.survey.title, lang),
+        description: translate(state.survey.description, lang),
+        questions: state.survey.questions.map((question) => ({
+          ...question,
+          text: translate(question.text, lang),
+          options: question.options.map((option) => ({
+            ...option,
+            label: option.allowOther ? translate(option.label || "기타", lang) : translate(option.label, lang)
+          }))
+        }))
+      };
+    }
+
+    function targetLabel(target) {
+      const fixed = terminalTargets.find((item) => item.id === target);
+      if (fixed) return fixed.label;
+      const index = questionIndex(target);
+      return index >= 0 ? `Q${index + 1}` : "누락";
+    }
+
+    function makeTargetOptions(currentQuestionId, selected) {
+      const questionOptions = state.survey.questions
+        .filter((question) => question.id !== currentQuestionId)
+        .map((question) => `<option value="${question.id}" ${selected === question.id ? "selected" : ""}>Q${questionIndex(question.id) + 1}. ${escapeHtml(question.text).slice(0, 28)}</option>`)
+        .join("");
+      const terminalOptions = terminalTargets
+        .map((target) => `<option value="${target.id}" ${selected === target.id ? "selected" : ""}>${target.label}</option>`)
+        .join("");
+      return `${terminalOptions}${questionOptions}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function updateSurveyFromMeta() {
+      state.survey.title = els.surveyTitle.value;
+      state.survey.description = els.surveyDescription.value;
+      state.survey.baseLanguage = els.baseLanguage.value;
+    }
+
+    function renderStatus() {
+      const issues = validateFlow();
+      const errors = issues.filter((item) => item.type === "error").length;
+      const warnings = issues.filter((item) => item.type === "warn").length;
+      els.statusStrip.innerHTML = `
+        <span class="pill">${state.survey.questions.length}개 질문</span>
+        <span class="pill">${state.survey.languages.length}개 언어</span>
+        <span class="pill">${errors ? `${errors}개 오류` : "오류 없음"}</span>
+        <span class="pill">${warnings ? `${warnings}개 경고` : "분기 정상"}</span>
+      `;
+    }
+
+    function renderMeta() {
+      if (document.activeElement !== els.surveyTitle) els.surveyTitle.value = state.survey.title;
+      if (document.activeElement !== els.surveyDescription) els.surveyDescription.value = state.survey.description;
+      if (document.activeElement !== els.baseLanguage) els.baseLanguage.value = state.survey.baseLanguage;
+      els.languageGrid.innerHTML = languages.map((lang) => `
+        <label class="lang-card">
+          <span class="switch-row">
+            <input type="checkbox" data-lang="${lang.code}" ${state.survey.languages.includes(lang.code) ? "checked" : ""}>
+            <strong>${lang.label}</strong>
+          </span>
+          <span class="tiny">${escapeHtml(translate(state.survey.title, lang.code))}</span>
+        </label>
+      `).join("");
+    }
+
+    function renderFlowList() {
+      const metaItem = `
+        <button class="flow-item meta ${state.activePage === "meta" ? "active" : ""}" data-page-id="meta">
+          <strong>기본 정보</strong>
+          <span>제목 · 설명 · 생성 언어</span>
+        </button>
+      `;
+      els.flowList.innerHTML = metaItem + state.survey.questions.map((question, index) => {
+        const screenoutCount = supportsBranching(question) ? question.options.filter((option) => option.next === "screenout").length : 0;
+        const typeLabel = currentQuestionType(question).label;
+        const branchLabel = supportsBranching(question) ? ` · 탈락 ${screenoutCount}개` : "";
+        return `
+          <button class="flow-item ${state.activePage === "question" && question.id === state.activeQuestionId ? "active" : ""}" data-question-id="${question.id}">
+            <strong>Q${index + 1}. ${escapeHtml(question.text || "질문 없음")}</strong>
+            <span>${typeLabel}${supportsChoices(question) ? ` · ${question.options.length}개 선지` : ""}${branchLabel}</span>
+          </button>
+        `;
+      }).join("") + `
+        <div class="flow-item screenout">
+          <strong>탈락 섹션</strong>
+          <span>조건 불일치 응답자에게 표시</span>
+        </div>
+      `;
+    }
+
+    function renderQuestionEditor() {
+      const question = activeQuestion();
+      if (!question) {
+        els.questionEditor.innerHTML = `<div class="empty">질문을 추가하면 편집기가 열립니다.</div>`;
+        return;
+      }
+      const type = currentQuestionType(question);
+      const typeOptions = questionTypes.map((item) => `
+        <option value="${item.value}" ${question.type === item.value ? "selected" : ""}>${item.label}</option>
+      `).join("");
+      const choiceHeading = supportsBranching(question) ? "선지와 다음 이동" : "선지";
+      const choiceHelp = supportsBranching(question)
+        ? "객관식과 드롭다운은 선지별 다음 이동을 설정할 수 있습니다."
+        : ["multiple_choice_grid", "checkbox_grid"].includes(question.type)
+          ? "그리드는 행 항목을 선지로 만들고 기본 열은 동의/보통/비동의로 생성합니다."
+          : "복수선택은 Google Forms 제약상 스크리닝 분기 없이 선지만 만듭니다.";
+      const nextPageMarkup = !supportsBranching(question) ? `
+        <div class="next-page-row">
+          <div>
+            <h3 style="margin: 0 0 4px; font-size: 14px;">응답 후 다음 페이지</h3>
+            <div class="tiny">선지별 분기는 아니지만, 이 질문을 제출한 뒤 이동할 섹션을 정할 수 있습니다.</div>
+          </div>
+          <label>
+            다음 페이지
+            <select id="questionNextPage">
+              ${makeTargetOptions(question.id, questionNextTarget(question))}
+            </select>
+          </label>
+        </div>
+      ` : "";
+      const optionsMarkup = supportsChoices(question) ? `
+        <div class="section-title">
+          <h3>${choiceHeading}</h3>
+          <button class="btn" id="addOptionBtn">선지 추가</button>
+        </div>
+        <div class="tiny">${choiceHelp}</div>
+        <div class="option-table">
+          ${question.options.map((option) => `
+            <div class="option-row ${supportsBranching(question) ? "" : "no-branch"}" data-option-id="${option.id}">
+              <input type="text" value="${escapeHtml(option.label)}" data-field="label" aria-label="선지">
+              ${supportsBranching(question) ? `
+                <select data-field="next" aria-label="다음 이동">
+                  ${makeTargetOptions(question.id, option.next)}
+                </select>
+              ` : ""}
+              ${supportsOtherInput(question) ? `
+                <label class="mini-toggle">
+                  <input type="checkbox" data-field="allowOther" ${option.allowOther ? "checked" : ""}>
+                  직접 입력
+                </label>
+              ` : ""}
+              <button class="icon-btn" data-action="delete-option" title="선지 삭제">×</button>
+            </div>
+          `).join("")}
+        </div>
+        ${nextPageMarkup}
+      ` : type.kind === "scale" ? `
+        <div class="section-title">
+          <h3>선형 배율 설정</h3>
+        </div>
+        <div class="scale-row">
+          <label>
+            최소값
+            <select id="scaleMin">
+              <option value="0" ${question.scale?.min === 0 ? "selected" : ""}>0</option>
+              <option value="1" ${question.scale?.min !== 0 ? "selected" : ""}>1</option>
+            </select>
+          </label>
+          <label>
+            최대값
+            <select id="scaleMax">
+              ${[2,3,4,5,6,7,8,9,10].map((value) => `<option value="${value}" ${(question.scale?.max || 5) === value ? "selected" : ""}>${value}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="scale-row">
+          <label>
+            낮은 값 라벨
+            <input id="scaleLowLabel" type="text" value="${escapeHtml(question.scale?.lowLabel || "")}">
+          </label>
+          <label>
+            높은 값 라벨
+            <input id="scaleHighLabel" type="text" value="${escapeHtml(question.scale?.highLabel || "")}">
+          </label>
+        </div>
+        ${nextPageMarkup}
+      ` : `
+        <div class="empty">${type.label} 질문은 응답 입력 필드만 생성하며 선지나 분기 이동을 설정하지 않습니다.</div>
+        ${nextPageMarkup}
+      `;
+
+      els.questionEditor.innerHTML = `
+        <div class="editor-head">
+          <label>
+            질문 문구
+            <input id="questionText" type="text" value="${escapeHtml(question.text)}">
+          </label>
+          <label>
+            질문 유형
+            <select id="questionType">
+              ${typeOptions}
+            </select>
+          </label>
+          <label>
+            필수 여부
+            <select id="questionRequired">
+              <option value="true" ${question.required ? "selected" : ""}>필수</option>
+              <option value="false" ${!question.required ? "selected" : ""}>선택</option>
+            </select>
+          </label>
+        </div>
+        ${optionsMarkup}
+      `;
+    }
+
+    function computeFlowLayout() {
+      const nodes = [
+        ...state.survey.questions.map((question, index) => ({
+          id: question.id,
+          kind: "question",
+          question,
+          index
+        })),
+        { id: "submit", kind: "submit" },
+        { id: "screenout", kind: "screenout" }
+      ];
+      const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+      const levels = new Map();
+      const firstQuestion = state.survey.questions[0]?.id;
+      if (firstQuestion) levels.set(firstQuestion, 0);
+
+      const queue = firstQuestion ? [firstQuestion] : [];
+      while (queue.length) {
+        const currentId = queue.shift();
+        const currentLevel = levels.get(currentId) || 0;
+        const currentQuestion = state.survey.questions.find((question) => question.id === currentId);
+        if (!currentQuestion || !supportsBranching(currentQuestion)) continue;
+
+        currentQuestion.options.forEach((option) => {
+          if (!nodeMap.has(option.next) || option.next === currentId) return;
+          const nextLevel = currentLevel + 1;
+          if (!levels.has(option.next) || nextLevel < levels.get(option.next)) {
+            levels.set(option.next, nextLevel);
+            if (state.survey.questions.some((question) => question.id === option.next)) {
+              queue.push(option.next);
+            }
+          }
+        });
+      }
+
+      state.survey.questions.forEach((question, index) => {
+        if (supportsBranching(question)) return;
+        const currentLevel = levels.get(question.id) ?? index;
+        const target = questionNextTarget(question);
+        if (!nodeMap.has(target) || target === question.id) return;
+        const nextLevel = currentLevel + 1;
+        if (!levels.has(target) || nextLevel < levels.get(target)) {
+          levels.set(target, nextLevel);
+        }
+      });
+
+      state.survey.questions.forEach((question, index) => {
+        if (!levels.has(question.id)) levels.set(question.id, index);
+      });
+      if (!levels.has("submit")) levels.set("submit", Math.max(1, state.survey.questions.length));
+      if (!levels.has("screenout")) levels.set("screenout", Math.max(1, state.survey.questions.length));
+
+      const grouped = new Map();
+      nodes.forEach((node) => {
+        const level = levels.get(node.id) || 0;
+        if (!grouped.has(level)) grouped.set(level, []);
+        grouped.get(level).push(node);
+      });
+
+      const levelKeys = [...grouped.keys()].sort((a, b) => a - b);
+      const maxInLevel = Math.max(1, ...levelKeys.map((level) => grouped.get(level).length));
+      const nodeWidth = 260;
+      const columnGap = 70;
+      const rowGap = 235;
+      const width = Math.max(760, maxInLevel * nodeWidth + (maxInLevel - 1) * columnGap + 80);
+      const positions = new Map();
+
+      levelKeys.forEach((level) => {
+        const levelNodes = grouped.get(level).sort((a, b) => {
+          const order = { question: 0, submit: 1, screenout: 2 };
+          return (a.index ?? 999) - (b.index ?? 999) || order[a.kind] - order[b.kind];
+        });
+        const totalWidth = levelNodes.length * nodeWidth + (levelNodes.length - 1) * columnGap;
+        const leftStart = Math.max(40, (width - totalWidth) / 2);
+        levelNodes.forEach((node, index) => {
+          positions.set(node.id, {
+            x: leftStart + index * (nodeWidth + columnGap),
+            y: 34 + level * rowGap,
+            width: nodeWidth
+          });
+        });
+      });
+
+      const height = Math.max(390, 120 + (Math.max(...levelKeys) + 1) * rowGap);
+      return { nodes, positions, width, height };
+    }
+
+    function renderFlowMap() {
+      const layout = computeFlowLayout();
+      const questionNodes = state.survey.questions.map((question, index) => {
+        const type = currentQuestionType(question);
+        const options = supportsBranching(question) ? question.options.map((option) => `
+          <div class="map-option branch-source" data-branch-question="${question.id}" data-branch-option="${option.id}">
+            <span
+              class="connector-handle"
+              title="화살표 시작점"
+            ></span>
+            <span>${escapeHtml(option.allowOther ? `${option.label || "기타"} 직접 입력` : option.label || "빈 선지")}</span>
+            <small>→ ${targetLabel(option.next)}</small>
+          </div>
+        `).join("") : `
+          <div class="map-option branch-source" data-page-question="${question.id}">
+            <span class="connector-handle" title="화살표 시작점"></span>
+            <span>응답 후 이동</span>
+            <small>→ ${targetLabel(questionNextTarget(question))}</small>
+          </div>
+        `;
+        const position = layout.positions.get(question.id);
+
+        return `
+          <div
+            class="map-node ${state.activePage === "question" && state.activeQuestionId === question.id ? "active" : ""}"
+            data-flow-target="${question.id}"
+            data-map-question="${question.id}"
+            style="left: ${position.x}px; top: ${position.y}px; width: ${position.width}px;"
+          >
+            <div class="map-node-head">
+              <strong>Q${index + 1}. ${escapeHtml(question.text || "질문 없음")}</strong>
+              <span>${type.label}</span>
+            </div>
+            <div class="map-options">${options}</div>
+          </div>
+        `;
+      }).join("");
+      const submitPosition = layout.positions.get("submit");
+      const screenoutPosition = layout.positions.get("screenout");
+
+      els.flowMap.innerHTML = `
+        <div class="flow-map-canvas" id="flowMapCanvas" style="width: ${layout.width}px; height: ${layout.height}px;">
+          <svg class="flow-arrows" id="flowArrows" aria-hidden="true">
+            <defs>
+              <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"></path>
+              </marker>
+            </defs>
+          </svg>
+          <div class="arrow-controls" id="arrowControls"></div>
+          <div class="arrow-labels" id="arrowLabels"></div>
+          <div class="map-board">
+            ${questionNodes}
+            <div class="map-node submit" data-flow-target="submit" style="left: ${submitPosition.x}px; top: ${submitPosition.y}px; width: ${submitPosition.width}px;">
+              <div class="map-node-head">
+                <strong>완료 제출</strong>
+                <span>응답 완료</span>
+              </div>
+              <div class="map-options"><div class="empty">최종 제출 노드</div></div>
+            </div>
+            <div class="map-node terminal" data-flow-target="screenout" style="left: ${screenoutPosition.x}px; top: ${screenoutPosition.y}px; width: ${screenoutPosition.width}px;">
+              <div class="map-node-head">
+                <strong>탈락 처리</strong>
+                <span>스크리닝 종료</span>
+              </div>
+              <div class="map-options"><div class="empty">조건 불일치 노드</div></div>
+            </div>
+          </div>
+        </div>
+      `;
+      drawFlowArrows();
+      setTimeout(drawFlowArrows, 0);
+    }
+
+    function drawFlowArrows() {
+      const canvas = document.querySelector("#flowMapCanvas");
+      const svg = document.querySelector("#flowArrows");
+      const controls = document.querySelector("#arrowControls");
+      const labelLayer = document.querySelector("#arrowLabels");
+      if (!canvas || !svg || !controls || !labelLayer) return;
+      const defs = svg.querySelector("defs")?.outerHTML || "";
+      const canvasRect = canvas.getBoundingClientRect();
+      const paths = [];
+      const buttons = [];
+      const labels = [];
+      const drawEdge = ({ question, option, source, targetId, label, optionIndex = 0, colorOverride = null }) => {
+        const target = canvas.querySelector(`[data-flow-target="${targetId}"]`);
+        if (!source || !target) return;
+
+        const start = source.getBoundingClientRect();
+        const end = target.getBoundingClientRect();
+        const x1 = start.left + start.width / 2 - canvasRect.left;
+        const y1 = start.bottom - canvasRect.top;
+        const isDragging = state.draggingArrow?.questionId === question.id && state.draggingArrow?.optionId === option.id;
+        const siblings = supportsBranching(question)
+          ? question.options.filter((item) => item.next === targetId)
+          : [{ id: "__page__" }];
+        const siblingIndex = siblings.findIndex((item) => item.id === option.id);
+        const spread = (Math.max(0, siblingIndex) - (siblings.length - 1) / 2) * 34;
+        const x2 = isDragging ? state.draggingArrow.x : end.left + end.width / 2 + spread - canvasRect.left;
+        const y2 = isDragging ? state.draggingArrow.y : end.top - canvasRect.top;
+        const midY = y1 + Math.max(52, (y2 - y1) * 0.52);
+        const color = colorOverride || (targetId === "screenout" ? "#c24134" : targetId === "submit" ? "#16866f" : "#2563eb");
+        const labelX = x1 + (x2 - x1) * 0.34;
+        const labelY = y1 + Math.max(28, Math.min(78, (y2 - y1) * 0.34)) + optionIndex * 2;
+        const shortLabel = label.trim().slice(0, 4);
+        paths.push(`
+          <path class="flow-arrow-line" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" fill="none" stroke="${color}" stroke-width="${isDragging ? "3.2" : "2.4"}" marker-end="url(#arrowHead)" opacity="${isDragging ? "1" : "0.9"}"></path>
+        `);
+        labels.push(`
+          <span class="branch-label" style="left: ${labelX}px; top: ${labelY}px; color: ${color}; border-color: ${color}40;">
+            ${escapeHtml(shortLabel || "이동")}
+          </span>
+        `);
+        buttons.push(`
+          <button
+            class="arrow-end"
+            title="${escapeHtml(label || "이동")} 화살표 끝 이동"
+            data-arrow-question="${question.id}"
+            data-arrow-option="${option.id}"
+            style="left: ${x2}px; top: ${y2}px; border-color: ${color}; ${isDragging ? "width: 34px; height: 34px;" : ""}"
+            aria-label="${escapeHtml(label || "이동")} 화살표 끝 이동"
+          ></button>
+        `);
+      };
+
+      state.survey.questions.forEach((question) => {
+        if (!supportsBranching(question)) {
+          drawEdge({
+            question,
+            option: { id: "__page__" },
+            source: canvas.querySelector(`[data-page-question="${question.id}"]`),
+            targetId: questionNextTarget(question),
+            label: "다음",
+            colorOverride: "#7654c4"
+          });
+          return;
+        }
+        question.options.forEach((option) => {
+          const optionIndex = question.options.findIndex((item) => item.id === option.id);
+          const source = canvas.querySelector(`[data-branch-question="${question.id}"][data-branch-option="${option.id}"]`);
+          drawEdge({
+            question,
+            option,
+            source,
+            targetId: option.next,
+            label: option.allowOther ? option.label || "기타" : option.label || "선지",
+            optionIndex
+          });
+        });
+      });
+
+      svg.dataset.arrowCount = String(paths.length);
+      svg.innerHTML = defs + paths.join("");
+      controls.innerHTML = buttons.join("");
+      labelLayer.innerHTML = labels.join("");
+    }
+
+    function connectOptionToTarget(questionId, optionId, targetId) {
+      const question = state.survey.questions.find((item) => item.id === questionId);
+      if (optionId === "__page__") {
+        if (!question || supportsBranching(question) || targetId === questionId) return;
+        question.nextPage = targetId;
+        clearPendingConnector();
+        state.activePage = "question";
+        state.activeQuestionId = questionId;
+        renderAll();
+        return;
+      }
+      const option = question?.options.find((item) => item.id === optionId);
+      if (!question || !option || !supportsBranching(question)) return;
+      if (targetId === questionId) return;
+      option.next = targetId;
+      clearPendingConnector();
+      state.activePage = "question";
+      state.activeQuestionId = questionId;
+      renderAll();
+    }
+
+    function beginConnector(questionId, optionId) {
+      state.pendingConnector = { questionId, optionId };
+      document.body.classList.add("is-connecting");
+      document.querySelectorAll("[data-flow-target]").forEach((node) => node.classList.add("drop-ready"));
+    }
+
+    function clearPendingConnector() {
+      state.pendingConnector = null;
+      state.draggingArrow = null;
+      document.body.classList.remove("is-connecting");
+      document.querySelectorAll("[data-flow-target]").forEach((node) => node.classList.remove("drop-ready"));
+      drawFlowArrows();
+    }
+
+    function canvasPointFromEvent(event) {
+      const canvas = document.querySelector("#flowMapCanvas");
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function beginArrowDrag(questionId, optionId, event) {
+      beginConnector(questionId, optionId);
+      state.draggingArrow = {
+        questionId,
+        optionId,
+        ...canvasPointFromEvent(event)
+      };
+      drawFlowArrows();
+    }
+
+    function moveArrowDrag(event) {
+      if (!state.draggingArrow) return;
+      Object.assign(state.draggingArrow, canvasPointFromEvent(event));
+      drawFlowArrows();
+    }
+
+    function validateFlow() {
+      const issues = [];
+      const ids = new Set(state.survey.questions.map((question) => question.id));
+      if (!state.survey.title.trim()) {
+        issues.push({ type: "error", text: "설문 제목이 비어 있습니다." });
+      }
+
+      state.survey.questions.forEach((question, index) => {
+        if (!question.text.trim()) {
+          issues.push({ type: "error", text: `Q${index + 1} 질문 문구가 비어 있습니다.` });
+        }
+        if (supportsChoices(question) && question.options.length < 2) {
+          issues.push({ type: "warn", text: `Q${index + 1}은 선지가 2개 미만입니다.` });
+        }
+        if (!supportsChoices(question)) return;
+        question.options.forEach((option) => {
+          if (!option.label.trim()) {
+            issues.push({ type: "error", text: `Q${index + 1}에 빈 선지가 있습니다.` });
+          }
+          if (supportsBranching(question) && !["continue", "screenout", "submit"].includes(option.next) && !ids.has(option.next)) {
+            issues.push({ type: "error", text: `Q${index + 1}의 "${option.label || "빈 선지"}" 이동 대상이 없습니다.` });
+          }
+        });
+      });
+
+      const branchQuestions = state.survey.questions.filter((question) => supportsBranching(question));
+      const hasSubmit = branchQuestions.some((question) => question.options.some((option) => option.next === "submit"));
+      const hasScreenout = branchQuestions.some((question) => question.options.some((option) => option.next === "screenout"));
+      if (!hasSubmit) issues.push({ type: "warn", text: "완료 제출로 이어지는 선지가 없습니다." });
+      if (!hasScreenout) issues.push({ type: "warn", text: "스크리닝 탈락 조건이 아직 없습니다." });
+      if (!issues.length) issues.push({ type: "ok", text: "모든 선지가 완료, 탈락, 또는 존재하는 질문으로 연결됩니다." });
+      return issues;
+    }
+
+    function renderInsights() {
+      els.insightList.innerHTML = validateFlow().map((issue) => `
+        <div class="insight ${issue.type === "error" ? "error" : issue.type === "warn" ? "warn" : ""}">
+          ${escapeHtml(issue.text)}
+        </div>
+      `).join("");
+    }
+
+    function renderPreview() {
+      const lang = els.previewLanguage.value;
+      const survey = localizedSurvey(lang);
+      if (state.activePage === "meta") {
+        els.previewProgress.textContent = "기본 정보";
+        els.formPreview.innerHTML = `
+          <div class="preview-title">
+            <h2>${escapeHtml(survey.title || "설문 제목")}</h2>
+            <p>${escapeHtml(survey.description || "설문 설명")}</p>
+          </div>
+          <div class="empty">응답자가 처음 보게 될 설문 시작 화면입니다.</div>
+        `;
+        return;
+      }
+      const question = survey.questions[questionIndex(state.activeQuestionId)] || survey.questions[0];
+      const currentIndex = questionIndex(state.activeQuestionId) + 1;
+      els.previewProgress.textContent = question ? `${currentIndex}/${survey.questions.length}` : "0/0";
+
+      if (!question) {
+        els.formPreview.innerHTML = `<div class="empty">미리볼 질문이 없습니다.</div>`;
+        return;
+      }
+
+      const originalQuestion = activeQuestion();
+      const type = currentQuestionType(originalQuestion);
+      const controlMarkup = supportsChoices(originalQuestion) ? question.options.map((option) => `
+        <div class="choice">
+          <span class="radio-dot" style="${originalQuestion.type === "checkbox" ? "border-radius: 4px;" : ""}"></span>
+          <span>${escapeHtml(option.label)}</span>
+        </div>
+        ${option.allowOther ? `<div class="form-control-preview" style="margin-left: 24px;">직접 입력 답변</div>` : ""}
+      `).join("") : type.kind === "scale" ? `
+        <div class="choice">${question.scale?.lowLabel ? escapeHtml(question.scale.lowLabel) : ""}</div>
+        <div class="choice">${Array.from({ length: (question.scale?.max || 5) - (question.scale?.min ?? 1) + 1 }, (_, index) => (question.scale?.min ?? 1) + index).map((value) => `<span class="pill">${value}</span>`).join("")}</div>
+        <div class="choice">${question.scale?.highLabel ? escapeHtml(question.scale.highLabel) : ""}</div>
+      ` : `
+        <div class="form-control-preview">${type.value === "paragraph" ? "장문 답변" : type.value === "date" ? "연도/월/일" : type.value === "time" ? "시간" : type.value === "file_upload" ? "파일 업로드" : "단답형 답변"}</div>
+      `;
+      const branchMarkup = supportsBranching(originalQuestion)
+        ? `<div class="tiny">현재 질문의 선지 이동: ${question.options.map((option) => `${escapeHtml(option.label)} → ${targetLabel(option.next)}`).join(" / ")}</div>`
+        : `<div class="tiny">응답 후 다음 페이지: ${targetLabel(questionNextTarget(originalQuestion))}</div>`;
+
+      els.formPreview.innerHTML = `
+        <div class="preview-title">
+          <h2>${escapeHtml(survey.title)}</h2>
+          <p>${escapeHtml(survey.description)}</p>
+        </div>
+        <div class="preview-question">
+          <strong>${escapeHtml(question.text)} ${question.required ? "<span style='color: var(--red);'>*</span>" : ""}</strong>
+          ${controlMarkup}
+        </div>
+        ${["multiple_choice_grid", "checkbox_grid"].includes(originalQuestion.type) ? `<div class="tiny">기본 열: ${(originalQuestion.columns || ["동의", "보통", "비동의"]).map(escapeHtml).join(" / ")}</div>` : branchMarkup}
+      `;
+    }
+
+    function exportJson() {
+      const payload = {
+        ...state.survey,
+        localized: Object.fromEntries(state.survey.languages.map((lang) => [lang, localizedSurvey(lang)]))
+      };
+      return JSON.stringify(payload, null, 2);
+    }
+
+    function escapeForScript(value) {
+      return String(value).replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
+    }
+
+    function exportAppsScript() {
+      const payload = JSON.stringify(state.survey, null, 2);
+      return `function createScreeningForm() {
+  const survey = ${payload};
+  const form = FormApp.create(survey.title);
+  form.setDescription(survey.description);
+
+  const sections = {};
+  const items = {};
+
+  survey.questions.forEach((question, index) => {
+    sections[question.id] = form.addPageBreakItem().setTitle("Q" + (index + 1));
+    let item;
+    switch (question.type) {
+      case "short_answer":
+        item = form.addTextItem();
+        break;
+      case "paragraph":
+        item = form.addParagraphTextItem();
+        break;
+      case "checkbox":
+        item = form.addCheckboxItem();
+        break;
+      case "select":
+        item = form.addListItem();
+        break;
+      case "linear_scale":
+        item = form.addScaleItem();
+        item.setBounds(question.scale?.min || 1, question.scale?.max || 5);
+        if (question.scale?.lowLabel || question.scale?.highLabel) {
+          item.setLabels(question.scale?.lowLabel || "", question.scale?.highLabel || "");
+        }
+        break;
+      case "multiple_choice_grid":
+        item = form.addGridItem();
+        break;
+      case "checkbox_grid":
+        item = form.addCheckboxGridItem();
+        break;
+      case "file_upload":
+        item = form.addFileUploadItem
+          ? form.addFileUploadItem()
+          : form.addSectionHeaderItem().setHelpText("이 계정에서는 Apps Script 파일 업로드 항목 생성이 제한될 수 있습니다.");
+        break;
+      case "date":
+        item = form.addDateItem();
+        break;
+      case "time":
+        item = form.addTimeItem();
+        break;
+      default:
+        item = form.addMultipleChoiceItem();
+    }
+    item.setTitle(question.text);
+    if (item.setRequired) item.setRequired(Boolean(question.required));
+    items[question.id] = item;
+  });
+
+  const screenoutPage = form.addPageBreakItem().setTitle("Screenout");
+  form.addSectionHeaderItem()
+    .setTitle("설문 대상 조건에 맞지 않아 여기서 종료됩니다.")
+    .setHelpText("응답해 주셔서 감사합니다.");
+
+  survey.questions.forEach((question) => {
+    const item = items[question.id];
+    if (!question.options || !question.options.length) return;
+    if (question.type === "checkbox") {
+      item.setChoices(question.options.filter((option) => !option.allowOther).map((option) => item.createChoice(option.label)));
+      if (question.options.some((option) => option.allowOther) && item.showOtherOption) item.showOtherOption(true);
+      return;
+    }
+    if (question.type === "multiple_choice_grid" || question.type === "checkbox_grid") {
+      item
+        .setRows(question.options.map((option) => option.label))
+        .setColumns(question.columns || ["동의", "보통", "비동의"]);
+      return;
+    }
+    if (!["radio", "select"].includes(question.type)) return;
+    const choices = question.options.filter((option) => !option.allowOther).map((option) => {
+      if (option.next === "screenout") return item.createChoice(option.label, screenoutPage);
+      if (option.next === "submit") return item.createChoice(option.label, FormApp.PageNavigationType.SUBMIT);
+      if (option.next === "continue") return item.createChoice(option.label, FormApp.PageNavigationType.CONTINUE);
+      return item.createChoice(option.label, sections[option.next] || FormApp.PageNavigationType.CONTINUE);
+    });
+    item.setChoices(choices);
+    if (question.type === "radio" && question.options.some((option) => option.allowOther) && item.showOtherOption) item.showOtherOption(true);
+  });
+
+  const resolveDestination = (target) => {
+    if (target === "screenout") return screenoutPage;
+    if (target === "submit") return FormApp.PageNavigationType.SUBMIT;
+    if (target === "continue") return FormApp.PageNavigationType.CONTINUE;
+    return sections[target] || FormApp.PageNavigationType.CONTINUE;
+  };
+
+  survey.questions.forEach((question, index) => {
+    if (["radio", "select"].includes(question.type)) return;
+    const section = sections[question.id];
+    if (!section) return;
+    const fallbackNext = survey.questions[index + 1]?.id || "submit";
+    section.setGoToPage(resolveDestination(question.nextPage || fallbackNext));
+  });
+
+  Logger.log("Edit URL: " + form.getEditUrl());
+  Logger.log("Public URL: " + form.getPublishedUrl());
+}`;
+    }
+
+    function apiId(prefix, rawId) {
+      const source = `${prefix}:${rawId}`;
+      let hash = 0x13572468;
+      for (let index = 0; index < source.length; index += 1) {
+        hash = ((hash * 31) + source.charCodeAt(index)) & 0x7fffffff;
+      }
+      return hash.toString(16).padStart(8, "0");
+    }
+
+    function apiSectionId(targetId) {
+      return apiId("section", targetId);
+    }
+
+    function apiChoiceType(question) {
+      if (question.type === "checkbox") return "CHECKBOX";
+      if (question.type === "select") return "DROP_DOWN";
+      return "RADIO";
+    }
+
+    function apiChoiceOption(question, option) {
+      const payload = {
+        value: option.allowOther ? option.label || "기타" : option.label,
+        isOther: Boolean(option.allowOther)
+      };
+
+      if (!supportsBranching(question)) return payload;
+      if (option.next === "submit") {
+        payload.goToAction = "SUBMIT_FORM";
+      } else if (option.next === "continue") {
+        payload.goToAction = "NEXT_SECTION";
+      } else {
+        payload.goToSectionId = apiSectionId(option.next);
+      }
+      return payload;
+    }
+
+    function apiQuestionPayload(question) {
+      const payload = { required: Boolean(question.required) };
+      if (["radio", "checkbox", "select"].includes(question.type)) {
+        payload.choiceQuestion = {
+          type: apiChoiceType(question),
+          options: question.options.map((option) => apiChoiceOption(question, option)),
+          shuffle: false
+        };
+        return payload;
+      }
+      if (question.type === "paragraph" || question.type === "short_answer" || question.type === "file_upload") {
+        payload.textQuestion = { paragraph: question.type === "paragraph" || question.type === "file_upload" };
+        return payload;
+      }
+      if (question.type === "linear_scale") {
+        payload.scaleQuestion = {
+          low: question.scale?.min || 1,
+          high: question.scale?.max || 5,
+          lowLabel: question.scale?.lowLabel || "",
+          highLabel: question.scale?.highLabel || ""
+        };
+        return payload;
+      }
+      if (question.type === "date") {
+        payload.dateQuestion = { includeYear: true, includeTime: false };
+        return payload;
+      }
+      if (question.type === "time") {
+        payload.timeQuestion = { duration: false };
+        return payload;
+      }
+      payload.textQuestion = { paragraph: false };
+      return payload;
+    }
+
+    function apiQuestionItem(question) {
+      if (["multiple_choice_grid", "checkbox_grid"].includes(question.type)) {
+        return {
+          itemId: apiId("item", question.id),
+          title: question.text,
+          questionGroupItem: {
+            questions: question.options.map((option) => ({
+              required: Boolean(question.required),
+              rowQuestion: { title: option.label }
+            })),
+            grid: {
+              columns: {
+                type: question.type === "checkbox_grid" ? "CHECKBOX" : "RADIO",
+                options: (question.columns || ["동의", "보통", "비동의"]).map((column) => ({ value: column }))
+              }
+            }
+          }
+        };
+      }
+
+      return {
+        itemId: apiId("item", question.id),
+        title: question.text,
+        questionItem: {
+          question: apiQuestionPayload(question)
+        }
+      };
+    }
+
+    function buildFormsApiBatchPayloads(survey = state.survey) {
+      const setupRequests = [
+        {
+          updateFormInfo: {
+            info: {
+              title: survey.title || "Untitled survey",
+              description: survey.description || ""
+            },
+            updateMask: "title,description"
+          }
+        }
+      ];
+      let sectionIndex = 0;
+
+      survey.questions.forEach((question, questionIndexValue) => {
+        setupRequests.push({
+          createItem: {
+            item: {
+              itemId: apiSectionId(question.id),
+              title: `Q${questionIndexValue + 1}`,
+              description: questionIndexValue === 0 ? survey.description || "" : "",
+              pageBreakItem: {}
+            },
+            location: { index: sectionIndex++ }
+          }
+        });
+      });
+
+      setupRequests.push({
+        createItem: {
+          item: {
+            itemId: apiSectionId("screenout"),
+            title: "Screenout",
+            description: "설문 대상 조건에 맞지 않아 여기서 종료됩니다.",
+            pageBreakItem: {}
+          },
+          location: { index: sectionIndex++ }
+        }
+      });
+
+      const contentRequests = [];
+      const questionCount = survey.questions.length;
+      [...survey.questions].reverse().forEach((question) => {
+        const originalIndex = questionIndexIn(survey, question.id);
+        contentRequests.push({
+          createItem: {
+            item: apiQuestionItem(question),
+            location: { index: originalIndex + 1 }
+          }
+        });
+      });
+      contentRequests.push({
+        createItem: {
+          item: {
+            itemId: apiId("item", "screenout_message"),
+            title: translate("응답해 주셔서 감사합니다.", survey.exportLanguage || state.survey.baseLanguage),
+            description: translate("조건 불일치로 설문이 종료되었습니다.", survey.exportLanguage || state.survey.baseLanguage),
+            textItem: {}
+          },
+          location: { index: questionCount * 2 + 1 }
+        }
+      });
+
+      return [
+        { requests: setupRequests },
+        { requests: contentRequests }
+      ];
+    }
+
+    function buildFormsApiBatchRequests(survey = state.survey) {
+      return {
+        requests: buildFormsApiBatchPayloads(survey).flatMap((payload) => payload.requests)
+      };
+    }
+
+    function directExportWarnings() {
+      const warnings = [];
+      const hasFileUpload = state.survey.questions.some((question) => question.type === "file_upload");
+      const hasNonChoiceJump = state.survey.questions.some((question) => {
+        if (supportsBranching(question)) return false;
+        const target = questionNextTarget(question);
+        return target !== nextQuestionId(question.id) && target !== "continue";
+      });
+      if (hasFileUpload) {
+        warnings.push("파일 업로드 질문은 브라우저 직접 내보내기에서 장문형 질문으로 대체됩니다. 완전한 파일 업로드가 필요하면 Apps Script 내보내기를 사용하세요.");
+      }
+      if (hasNonChoiceJump) {
+        warnings.push("Forms API는 페이지 브레이크의 '응답 후 이동'을 직접 설정하는 필드를 제공하지 않아, 비객관식 질문의 비순차 이동은 Google Form에서 한 번 확인이 필요합니다.");
+      }
+      return warnings;
+    }
+
+    function setGoogleStatus(message, type = "") {
+      els.googleExportStatus.textContent = message;
+      els.googleExportStatus.className = `export-status ${type}`.trim();
+    }
+
+    function googleOAuthErrorMessage(error) {
+      const type = error?.type || "";
+      const message = error?.message || "";
+      if (type === "popup_failed_to_open" || message.includes("popup")) {
+        return "Google 권한 승인 팝업을 열지 못했습니다. 브라우저의 팝업 차단을 해제하거나, 이 페이지를 Chrome/Safari 일반 브라우저에서 http://localhost:4173 주소로 열어 다시 시도해 주세요.";
+      }
+      if (type === "popup_closed") {
+        return "Google 권한 승인 창이 완료 전에 닫혔습니다. 다시 누른 뒤 권한 승인을 완료해 주세요.";
+      }
+      if (type) return `Google 권한 승인 오류: ${type}`;
+      return message || "Google 권한 승인 창을 열지 못했습니다. 팝업 차단 설정을 확인해 주세요.";
+    }
+
+    function saveGoogleClientId() {
+      const clientId = els.googleClientId.value.trim();
+      if (!clientId) {
+        setGoogleStatus("먼저 Google OAuth Client ID를 입력해 주세요.", "error");
+        return false;
+      }
+      localStorage.setItem("formflow_google_client_id", clientId);
+      setGoogleStatus("Client ID를 이 브라우저에 저장했습니다.", "success");
+      return true;
+    }
+
+    function loadGoogleIdentity() {
+      if (window.google?.accounts?.oauth2) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+        const script = existingScript || document.createElement("script");
+        let settled = false;
+        const timeoutId = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error("Google 로그인 스크립트를 불러오지 못했습니다. 네트워크, 광고 차단기, 팝업 차단 설정을 확인해 주세요."));
+        }, 10000);
+        const finish = () => {
+          if (settled) return;
+          if (!window.google?.accounts?.oauth2) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          resolve();
+        };
+        const fail = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          reject(new Error("Google 로그인 스크립트 로드에 실패했습니다. 새로고침 후 다시 시도해 주세요."));
+        };
+
+        script.addEventListener("load", finish, { once: true });
+        script.addEventListener("error", fail, { once: true });
+        if (!existingScript) {
+          script.src = "https://accounts.google.com/gsi/client";
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        }
+        finish();
+      });
+    }
+
+    async function getGoogleToken(clientId) {
+      await loadGoogleIdentity();
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const timeoutId = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error("Google 권한 승인 창에서 응답이 오지 않았습니다. 팝업 차단을 해제하거나, 승인 창이 뒤에 떠 있는지 확인해 주세요."));
+        }, 30000);
+        const finish = (handler) => (value) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          handler(value);
+        };
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "https://www.googleapis.com/auth/forms.body",
+          error_callback: finish((error) => {
+            reject(new Error(googleOAuthErrorMessage(error)));
+          }),
+          callback: finish((response) => {
+            if (response.error) {
+              reject(new Error(response.error_description || response.error));
+              return;
+            }
+            if (!response.access_token) {
+              reject(new Error("Google 권한 토큰을 받지 못했습니다. 권한 승인을 다시 시도해 주세요."));
+              return;
+            }
+            resolve(response.access_token);
+          })
+        });
+        tokenClient.requestAccessToken({ prompt: state.accessToken ? "" : "consent" });
+      });
+    }
+
+    async function googleApiFetch(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${state.accessToken}`,
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = payload.error?.message || `${response.status} ${response.statusText}`;
+        throw new Error(message);
+      }
+      return payload;
+    }
+
+    function languageLabel(lang) {
+      return languages.find((item) => item.code === lang)?.label || lang;
+    }
+
+    async function createGoogleFormFromSurvey(survey) {
+      const created = await googleApiFetch("https://forms.googleapis.com/v1/forms", {
+        method: "POST",
+        body: JSON.stringify({
+          info: {
+            title: survey.title || "Untitled survey",
+            documentTitle: survey.title || "Untitled survey"
+          }
+        })
+      });
+
+      const batchPayloads = buildFormsApiBatchPayloads(survey);
+      await googleApiFetch(`https://forms.googleapis.com/v1/forms/${created.formId}:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify(batchPayloads[0])
+      });
+      await googleApiFetch(`https://forms.googleapis.com/v1/forms/${created.formId}:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify(batchPayloads[1])
+      });
+
+      const form = await googleApiFetch(`https://forms.googleapis.com/v1/forms/${created.formId}`, { method: "GET" });
+      return {
+        formId: created.formId,
+        editUrl: `https://docs.google.com/forms/d/${created.formId}/edit`,
+        responderUri: form.responderUri,
+        title: survey.title,
+        lang: survey.exportLanguage || state.survey.baseLanguage
+      };
+    }
+
+    async function exportToGoogleForm() {
+      els.googleExportResult.classList.remove("is-visible");
+      els.googleExportResult.innerHTML = "";
+      if (!saveGoogleClientId()) return;
+
+      try {
+        els.googleExportBtn.disabled = true;
+        setGoogleStatus("Google 계정 권한을 요청하는 중입니다...");
+        state.accessToken = await getGoogleToken(els.googleClientId.value.trim());
+
+        const exportLanguages = state.survey.languages.length ? state.survey.languages : [state.survey.baseLanguage];
+        const results = [];
+        for (const lang of exportLanguages) {
+          setGoogleStatus(`${languageLabel(lang)} Google Form을 생성하는 중입니다... (${results.length + 1}/${exportLanguages.length})`);
+          results.push(await createGoogleFormFromSurvey(localizedSurvey(lang)));
+        }
+
+        const warnings = directExportWarnings();
+        els.googleExportResult.innerHTML = `
+          <strong>${results.length}개 언어 Google Form 생성 완료</strong>
+          ${results.map((result) => `
+            <div>
+              <b>${escapeHtml(languageLabel(result.lang))}</b>
+              <a href="${result.editUrl}" target="_blank" rel="noreferrer">편집 화면 열기</a>
+              ${result.responderUri ? `<a href="${result.responderUri}" target="_blank" rel="noreferrer">응답자 링크 열기</a>` : ""}
+            </div>
+          `).join("")}
+          ${warnings.length ? `<div>${warnings.map(escapeHtml).join("<br>")}</div>` : ""}
+        `;
+        els.googleExportResult.classList.add("is-visible");
+        setGoogleStatus(`${results.length}개 언어 내보내기가 완료되었습니다.`, "success");
+      } catch (error) {
+        setGoogleStatus(`내보내기 실패: ${error.message}`, "error");
+      } finally {
+        els.googleExportBtn.disabled = false;
+      }
+    }
+
+    function renderExport() {
+      els.exportOutput.textContent = state.exportMode === "json" ? exportJson() : exportAppsScript();
+    }
+
+    function renderActivePage() {
+      els.metaPanel.classList.toggle("is-hidden", state.activePage !== "meta");
+      els.questionPanel.classList.toggle("is-hidden", state.activePage !== "question");
+    }
+
+    function renderAll() {
+      renderStatus();
+      renderActivePage();
+      renderMeta();
+      renderFlowList();
+      renderQuestionEditor();
+      renderFlowMap();
+      renderInsights();
+      renderPreview();
+      renderExport();
+    }
+
+    function addQuestion() {
+      const id = uid("q");
+      state.survey.questions.push({
+        id,
+        type: "radio",
+        required: true,
+        text: "새 스크리닝 질문",
+        options: [
+          { id: uid("o"), label: "통과", next: "continue" },
+          { id: uid("o"), label: "탈락", next: "screenout" }
+        ]
+      });
+      state.activePage = "question";
+      state.activeQuestionId = id;
+      renderAll();
+    }
+
+    function duplicateQuestion() {
+      const question = activeQuestion();
+      if (!question) return;
+      const clone = {
+        ...question,
+        id: uid("q"),
+        text: `${question.text} 복사본`,
+        options: question.options.map((option) => ({ ...option, id: uid("o") }))
+      };
+      state.survey.questions.splice(questionIndex(question.id) + 1, 0, clone);
+      state.activePage = "question";
+      state.activeQuestionId = clone.id;
+      renderAll();
+    }
+
+    function deleteQuestion() {
+      if (state.survey.questions.length <= 1) return;
+      const index = questionIndex(state.activeQuestionId);
+      const removedId = state.activeQuestionId;
+      state.survey.questions.splice(index, 1);
+      state.survey.questions.forEach((question) => {
+        question.options.forEach((option) => {
+          if (option.next === removedId) option.next = "continue";
+        });
+      });
+      state.activeQuestionId = state.survey.questions[Math.max(0, index - 1)].id;
+      state.activePage = "question";
+      renderAll();
+    }
+
+    function loadSample() {
+      state.survey.title = "커피 소비자 스크리닝";
+      state.survey.description = "신제품 커피 리서치 참여자를 선별하기 위한 짧은 설문입니다.";
+      state.survey.baseLanguage = "ko";
+      state.survey.languages = ["ko", "en", "ja"];
+      state.survey.questions = [
+        {
+          id: "q1",
+          type: "radio",
+          required: true,
+          text: "만 19세 이상인가요?",
+          options: [
+            { id: "o1", label: "예", next: "q2" },
+            { id: "o2", label: "아니오", next: "screenout" }
+          ]
+        },
+        {
+          id: "q2",
+          type: "radio",
+          required: true,
+          text: "최근 3개월 내 커피를 구매한 적이 있나요?",
+          options: [
+            { id: "o1", label: "예", next: "q3" },
+            { id: "o2", label: "아니오", next: "screenout" }
+          ]
+        },
+        {
+          id: "q3",
+          type: "radio",
+          required: true,
+          text: "주로 어디에서 커피를 구매하나요?",
+          options: [
+            { id: "o1", label: "카페", next: "submit" },
+            { id: "o2", label: "편의점", next: "submit" },
+            { id: "o3", label: "온라인", next: "submit" },
+            { id: "o4", label: "기타", next: "submit" }
+          ]
+        }
+      ];
+      state.activePage = "meta";
+      state.activeQuestionId = "q1";
+      renderAll();
+    }
+
+    function normalizeQuestionForType(question) {
+      if (supportsChoices(question) && !question.options.length) {
+        question.options = [
+          { id: uid("o"), label: "선지 1", next: "continue" },
+          { id: uid("o"), label: "선지 2", next: "continue" }
+        ];
+      }
+      if (supportsBranching(question)) {
+        question.options = question.options.map((option) => ({
+          ...option,
+          next: option.next || "continue"
+        }));
+      }
+      if (currentQuestionType(question).kind === "scale" && !question.scale) {
+        question.scale = { min: 1, max: 5, lowLabel: "", highLabel: "" };
+      }
+      if (["multiple_choice_grid", "checkbox_grid"].includes(question.type) && !question.columns) {
+        question.columns = ["동의", "보통", "비동의"];
+      }
+    }
+
+    function bindEvents() {
+      els.googleClientId.value = localStorage.getItem("formflow_google_client_id") || "";
+      els.surveyTitle.addEventListener("input", () => {
+        updateSurveyFromMeta();
+        renderStatus();
+        renderPreview();
+        renderExport();
+      });
+      els.surveyDescription.addEventListener("input", () => {
+        updateSurveyFromMeta();
+        renderPreview();
+        renderExport();
+      });
+      els.baseLanguage.addEventListener("change", () => {
+        updateSurveyFromMeta();
+        renderAll();
+      });
+      els.previewLanguage.addEventListener("change", renderPreview);
+
+      document.querySelector("#addQuestionBtn").addEventListener("click", addQuestion);
+      document.querySelector("#duplicateQuestionBtn").addEventListener("click", duplicateQuestion);
+      document.querySelector("#deleteQuestionBtn").addEventListener("click", deleteQuestion);
+      document.querySelector("#loadSampleBtn").addEventListener("click", loadSample);
+      els.saveClientIdBtn.addEventListener("click", saveGoogleClientId);
+      els.googleExportBtn.addEventListener("click", exportToGoogleForm);
+      document.querySelector("#copyScriptBtn").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(exportAppsScript());
+        document.querySelector("#copyScriptBtn").textContent = "복사됨";
+        setTimeout(() => document.querySelector("#copyScriptBtn").textContent = "Apps Script 복사", 1200);
+      });
+      els.flowMap.addEventListener("scroll", drawFlowArrows);
+      window.addEventListener("resize", drawFlowArrows);
+
+      document.body.addEventListener("click", (event) => {
+        const arrowEnd = event.target.closest("[data-arrow-question]");
+        if (arrowEnd) {
+          beginArrowDrag(arrowEnd.dataset.arrowQuestion, arrowEnd.dataset.arrowOption, event);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+
+        const flowTarget = event.target.closest("[data-flow-target]");
+        if (flowTarget && state.pendingConnector) {
+          const pending = state.pendingConnector;
+          connectOptionToTarget(pending.questionId, pending.optionId, flowTarget.dataset.flowTarget);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+
+        const mapQuestion = event.target.closest("[data-map-question]");
+        if (mapQuestion && !event.target.closest("[data-arrow-question]")) {
+          state.activePage = "question";
+          state.activeQuestionId = mapQuestion.dataset.mapQuestion;
+          renderAll();
+        }
+
+        const pageItem = event.target.closest("[data-page-id]");
+        if (pageItem) {
+          state.activePage = pageItem.dataset.pageId;
+          renderAll();
+        }
+
+        const flowItem = event.target.closest("[data-question-id]");
+        if (flowItem) {
+          state.activePage = "question";
+          state.activeQuestionId = flowItem.dataset.questionId;
+          renderAll();
+        }
+
+        const exportTab = event.target.closest("[data-export]");
+        if (exportTab) {
+          state.exportMode = exportTab.dataset.export;
+          document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab === exportTab));
+          renderExport();
+        }
+
+        if (event.target.id === "addOptionBtn") {
+          const question = activeQuestion();
+          question.options.push({ id: uid("o"), label: "새 선지", next: "continue" });
+          renderAll();
+        }
+
+        if (event.target.dataset.action === "delete-option") {
+          const question = activeQuestion();
+          const optionRow = event.target.closest("[data-option-id]");
+          question.options = question.options.filter((option) => option.id !== optionRow.dataset.optionId);
+          renderAll();
+        }
+      });
+
+      document.body.addEventListener("pointerdown", (event) => {
+        const arrowEnd = event.target.closest("[data-arrow-question]");
+        if (!arrowEnd) return;
+        beginArrowDrag(arrowEnd.dataset.arrowQuestion, arrowEnd.dataset.arrowOption, event);
+        arrowEnd.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+      });
+
+      document.body.addEventListener("pointermove", (event) => {
+        moveArrowDrag(event);
+      });
+
+      document.body.addEventListener("pointerup", (event) => {
+        if (!state.pendingConnector) return;
+        const target = document
+          .elementsFromPoint(event.clientX, event.clientY)
+          .filter((element) => !element.closest?.("[data-arrow-question]"))
+          .map((element) => element.closest?.("[data-flow-target]"))
+          .find(Boolean);
+        const pending = state.pendingConnector;
+        if (!target) return;
+        clearPendingConnector();
+        connectOptionToTarget(pending.questionId, pending.optionId, target.dataset.flowTarget);
+      });
+
+      document.body.addEventListener("mousedown", (event) => {
+        const arrowEnd = event.target.closest("[data-arrow-question]");
+        if (!arrowEnd) return;
+        beginArrowDrag(arrowEnd.dataset.arrowQuestion, arrowEnd.dataset.arrowOption, event);
+      });
+
+      document.body.addEventListener("mousemove", (event) => {
+        moveArrowDrag(event);
+      });
+
+      document.body.addEventListener("mouseup", (event) => {
+        if (!state.pendingConnector) return;
+        const target = document
+          .elementsFromPoint(event.clientX, event.clientY)
+          .filter((element) => !element.closest?.("[data-arrow-question]"))
+          .map((element) => element.closest?.("[data-flow-target]"))
+          .find(Boolean);
+        if (!target) return;
+        const pending = state.pendingConnector;
+        clearPendingConnector();
+        connectOptionToTarget(pending.questionId, pending.optionId, target.dataset.flowTarget);
+      });
+
+      document.body.addEventListener("input", (event) => {
+        const question = activeQuestion();
+        if (!question) return;
+        if (event.target.id === "questionText") {
+          question.text = event.target.value;
+          renderStatus();
+          renderFlowList();
+          renderFlowMap();
+          renderInsights();
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.dataset.field === "label") {
+          const optionId = event.target.closest("[data-option-id]").dataset.optionId;
+          const option = question.options.find((item) => item.id === optionId);
+          option.label = event.target.value;
+          if (option.allowOther && !option.label.trim()) option.label = "기타";
+          renderStatus();
+          renderFlowMap();
+          renderInsights();
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.id === "scaleLowLabel") {
+          question.scale = question.scale || { min: 1, max: 5, lowLabel: "", highLabel: "" };
+          question.scale.lowLabel = event.target.value;
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.id === "scaleHighLabel") {
+          question.scale = question.scale || { min: 1, max: 5, lowLabel: "", highLabel: "" };
+          question.scale.highLabel = event.target.value;
+          renderPreview();
+          renderExport();
+        }
+      });
+
+      document.body.addEventListener("change", (event) => {
+        const question = activeQuestion();
+        if (event.target.dataset.lang) {
+          const lang = event.target.dataset.lang;
+          state.survey.languages = event.target.checked
+            ? [...new Set([...state.survey.languages, lang])]
+            : state.survey.languages.filter((item) => item !== lang);
+          if (!state.survey.languages.includes(els.previewLanguage.value)) {
+            els.previewLanguage.value = state.survey.languages[0] || "ko";
+          }
+          renderAll();
+        }
+        if (!question) return;
+        if (event.target.id === "questionType") {
+          question.type = event.target.value;
+          normalizeQuestionForType(question);
+          renderAll();
+        }
+        if (event.target.id === "questionRequired") {
+          question.required = event.target.value === "true";
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.id === "questionNextPage") {
+          question.nextPage = event.target.value === "continue" ? nextQuestionId(question.id) : event.target.value;
+          renderAll();
+        }
+        if (event.target.id === "scaleMin") {
+          question.scale = question.scale || { min: 1, max: 5, lowLabel: "", highLabel: "" };
+          question.scale.min = Number(event.target.value);
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.id === "scaleMax") {
+          question.scale = question.scale || { min: 1, max: 5, lowLabel: "", highLabel: "" };
+          question.scale.max = Number(event.target.value);
+          renderPreview();
+          renderExport();
+        }
+        if (event.target.dataset.field === "next") {
+          const optionId = event.target.closest("[data-option-id]").dataset.optionId;
+          const option = question.options.find((item) => item.id === optionId);
+          option.next = event.target.value === "continue" ? nextQuestionId(question.id) : event.target.value;
+          renderAll();
+        }
+        if (event.target.dataset.field === "allowOther") {
+          const optionId = event.target.closest("[data-option-id]").dataset.optionId;
+          const option = question.options.find((item) => item.id === optionId);
+          option.allowOther = event.target.checked;
+          if (option.allowOther && !option.label.trim()) option.label = "기타";
+          renderAll();
+        }
+      });
+    }
+
+    window.__formFlow = { state, connectOptionToTarget, renderAll, buildFormsApiBatchRequests, buildFormsApiBatchPayloads, exportToGoogleForm };
+    bindEvents();
+    renderAll();
+  </script>
+</body>
+</html>
