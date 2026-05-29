@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { isSupabaseConfigured, missingSupabasePublicEnv } from "@/lib/supabase";
 import { signInWithEmail, signInWithGoogle, signUpWithEmail } from "@/services/authService";
+import { getOnboardingStatus } from "@/services/profileService";
 
-export function AuthPanel({ compact = false }: { compact?: boolean }) {
+type AuthSuccessStatus = Awaited<ReturnType<typeof getOnboardingStatus>>;
+
+export function AuthPanel({ compact = false, onAuthSuccess }: { compact?: boolean; onAuthSuccess?: (status: AuthSuccessStatus) => void }) {
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/";
+  const nextPath = searchParams.get("next");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,8 +23,13 @@ export function AuthPanel({ compact = false }: { compact?: boolean }) {
     try {
       if (mode === "signin") await signInWithEmail(email, password);
       else await signUpWithEmail(email, password);
+      const status = await getOnboardingStatus();
       setMessage(mode === "signin" ? "로그인되었습니다." : "가입과 로그인이 완료되었습니다.");
-      window.location.href = nextPath;
+      if (onAuthSuccess) {
+        onAuthSuccess(status);
+        return;
+      }
+      window.location.href = status.onboardingCompleted ? (nextPath || "/") : "/onboarding";
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "인증 처리 중 오류가 발생했습니다.");
     } finally {

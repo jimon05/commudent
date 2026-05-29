@@ -241,6 +241,8 @@ export type UserProfile = {
   nickname: string;
   primaryGoal: PrimaryGoal;
   mainPainPoints: MainPainPoint[];
+  onboardingCompleted: boolean;
+  onboardingCompletedAt?: string | null;
   createdAt: string;
 };
 

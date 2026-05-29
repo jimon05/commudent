@@ -1,23 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnalysisOverviewSection } from "@/components/AnalysisOverviewSection";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { RecordingHistoryList } from "@/components/RecordingHistoryList";
 import { WeeklyInsightPanel } from "@/components/WeeklyInsightPanel";
-import { hydrateProfileFromSupabase } from "@/services/profileService";
+import { getOnboardingStatus } from "@/services/profileService";
 import { listRecentReports } from "@/services/reports";
 import type { SpeechReport } from "@/types/speech";
 
 export default function HomePage() {
+  const router = useRouter();
   const [reports, setReports] = useState<SpeechReport[]>([]);
   const [profileName, setProfileName] = useState("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    hydrateProfileFromSupabase().then(({ profile }) => {
+    getOnboardingStatus().then(({ profile, onboardingCompleted }) => {
       if (!mounted) return;
+      if (!onboardingCompleted) {
+        router.replace("/onboarding");
+        return;
+      }
       setProfileName(profile?.nickname ?? "Commudent");
       setIsLoadingProfile(false);
       listRecentReports().then((items) => {
@@ -27,7 +33,7 @@ export default function HomePage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [router]);
 
   const latestReport = reports[0];
   const recordCountLabel = useMemo(() => `${reports.length}개 기록`, [reports.length]);

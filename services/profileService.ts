@@ -31,6 +31,11 @@ function canUseStorage() {
   return typeof window !== "undefined" && window.localStorage;
 }
 
+function localProfileForUser(userId: string) {
+  const profile = getUserProfile();
+  return profile?.userId === userId ? profile : null;
+}
+
 export function getUserProfile(): UserProfile | null {
   if (!canUseStorage()) return null;
   const raw = window.localStorage.getItem(profileKey);
@@ -47,6 +52,18 @@ export function getOnboardingSelfCheck(): OnboardingSelfCheck | null {
   if (!canUseStorage()) return null;
   const raw = window.localStorage.getItem(selfCheckKey);
   return raw ? (JSON.parse(raw) as OnboardingSelfCheck) : null;
+}
+
+export async function getOnboardingStatus() {
+  const { profile, voiceProfile, selfCheck } = await hydrateProfileFromSupabase();
+  const onboardingCompleted = profile?.onboardingCompleted === true;
+  return {
+    profile,
+    voiceProfile,
+    selfCheck,
+    onboardingCompleted,
+    nextStep: onboardingCompleted ? 6 : resolveResumeStep({ profile, voiceProfile, selfCheck })
+  };
 }
 
 export async function hydrateProfileFromSupabase() {
@@ -72,10 +89,13 @@ export async function hydrateProfileFromSupabase() {
   const { data: voiceRow } = await supabase.from("voice_profiles").select("*").eq("user_id", userId).single<Record<string, unknown>>();
   const { data: selfCheckRows } = await supabase.from("onboarding_self_checks").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1);
 
-  const profile = profileRow ? hydrateUserProfile(profileRow) : getUserProfile();
-  const voiceProfile = voiceRow ? hydrateVoiceProfile(voiceRow) : getVoiceProfile();
+  const localProfile = getUserProfile();
+  const localVoiceProfile = getVoiceProfile();
+  const localSelfCheck = getOnboardingSelfCheck();
+  const profile = profileRow ? hydrateUserProfile(profileRow) : localProfile?.userId === userId ? localProfile : null;
+  const voiceProfile = voiceRow ? hydrateVoiceProfile(voiceRow) : localVoiceProfile?.userId === userId ? localVoiceProfile : null;
   const firstSelfCheck = Array.isArray(selfCheckRows) ? selfCheckRows[0] as Record<string, unknown> | undefined : undefined;
-  const selfCheck = firstSelfCheck ? hydrateSelfCheck(firstSelfCheck) : getOnboardingSelfCheck();
+  const selfCheck = firstSelfCheck ? hydrateSelfCheck(firstSelfCheck) : localSelfCheck?.userId === userId ? localSelfCheck : null;
 
   if (canUseStorage()) {
     if (profile) window.localStorage.setItem(profileKey, JSON.stringify(profile));
@@ -106,6 +126,8 @@ export async function saveOnboarding(input: {
     nickname: input.nickname || "발표 연습자",
     primaryGoal: input.primaryGoal,
     mainPainPoints: input.mainPainPoints,
+    onboardingCompleted: true,
+    onboardingCompletedAt: new Date().toISOString(),
     createdAt: new Date().toISOString()
   };
 
@@ -145,6 +167,94 @@ export async function saveOnboarding(input: {
   return { profile, voiceProfile, selfCheck };
 }
 
+export async function saveProfileSetup(input: { nickname: string }) {
+  const userId = (await getAuthenticatedUserId()) ?? "local-demo-user";
+  const existing = localProfileForUser(userId);
+  const profile: UserProfile = {
+    id: existing?.id ?? `profile-${Date.now()}`,
+    userId,
+    nickname: input.nickname || existing?.nickname || "나의 Commudent profile",
+    primaryGoal: existing?.primaryGoal ?? "presentation",
+    mainPainPoints: existing?.mainPainPoints ?? [],
+    onboardingCompleted: existing?.onboardingCompleted ?? false,
+    onboardingCompletedAt: existing?.onboardingCompletedAt ?? null,
+    createdAt: existing?.createdAt ?? new Date().toISOString()
+  };
+  if (canUseStorage()) window.localStorage.setItem(profileKey, JSON.stringify(profile));
+  await upsertProfileToSupabase(profile).catch((error) => {
+    console.warn("Supabase profile setup save failed. Local fallback was kept.", error);
+  });
+  return profile;
+}
+
+export async function saveOnboardingQuestions(input: {
+  nickname: string;
+  primaryGoal: PrimaryGoal;
+  mainPainPoints: MainPainPoint[];
+  selfCheckAnswers: Record<string, string | number | boolean>;
+}) {
+  const userId = (await getAuthenticatedUserId()) ?? "local-demo-user";
+  const existing = localProfileForUser(userId);
+  const profile: UserProfile = {
+    id: existing?.id ?? `profile-${Date.now()}`,
+    userId,
+    nickname: input.nickname || existing?.nickname || "나의 Commudent profile",
+    primaryGoal: input.primaryGoal,
+    mainPainPoints: input.mainPainPoints,
+    onboardingCompleted: existing?.onboardingCompleted ?? false,
+    onboardingCompletedAt: existing?.onboardingCompletedAt ?? null,
+    createdAt: existing?.createdAt ?? new Date().toISOString()
+  };
+  const selfCheck: OnboardingSelfCheck = {
+    id: `self-check-${Date.now()}`,
+    userId,
+    answers: input.selfCheckAnswers,
+    initialTypeScores: buildInitialScores(input.mainPainPoints, input.selfCheckAnswers),
+    createdAt: new Date().toISOString()
+  };
+
+  if (canUseStorage()) {
+    window.localStorage.setItem(profileKey, JSON.stringify(profile));
+    window.localStorage.setItem(selfCheckKey, JSON.stringify(selfCheck));
+  }
+  await saveQuestionStateToSupabase({ profile, selfCheck }).catch((error) => {
+    console.warn("Supabase onboarding question save failed. Local fallback was kept.", error);
+  });
+  return { profile, selfCheck };
+}
+
+export async function saveVoiceProfileStep(input: {
+  voiceSampleUrl: string | null;
+  voiceSampleBlob?: Blob | null;
+  voiceDurationSeconds: number;
+}) {
+  const userId = (await getAuthenticatedUserId()) ?? "local-demo-user";
+  const uploadedVoice = input.voiceSampleBlob && userId !== "local-demo-user"
+    ? await uploadAudioBlob({ blob: input.voiceSampleBlob, userId, folder: "voice-profiles" }).catch(() => null)
+    : null;
+  const sampleAudioUrl = uploadedVoice?.url ?? input.voiceSampleUrl;
+  const enrollment = await enrollVoiceProfileMock({
+    userId,
+    audioUrl: sampleAudioUrl,
+    durationSeconds: input.voiceDurationSeconds
+  });
+  const voiceProfile: VoiceProfile = {
+    id: `voice-${Date.now()}`,
+    userId,
+    sampleAudioUrl,
+    sampleStoragePath: uploadedVoice?.storagePath ?? null,
+    voiceEmbeddingId: enrollment.voiceEmbeddingId,
+    enrollmentStatus: uploadedVoice ? "sample_saved" : enrollment.enrollmentStatus,
+    createdAt: new Date().toISOString()
+  };
+
+  if (canUseStorage()) window.localStorage.setItem(voiceKey, JSON.stringify(voiceProfile));
+  await upsertVoiceProfileToSupabase(voiceProfile).catch((error) => {
+    console.warn("Supabase voice profile save failed. Local fallback was kept.", error);
+  });
+  return voiceProfile;
+}
+
 async function getAuthenticatedUserId() {
   if (!isSupabaseConfigured) return null;
   const supabase = await createSupabaseBrowserClient();
@@ -161,26 +271,56 @@ async function saveOnboardingToSupabase(input: {
   const supabase = await createSupabaseBrowserClient();
   if (!supabase) return;
 
-  await supabase.from("user_profiles").upsert({
-    user_id: input.profile.userId,
-    nickname: input.profile.nickname,
-    primary_goal: input.profile.primaryGoal,
-    main_pain_points: input.profile.mainPainPoints
-  }, { onConflict: "user_id" });
-
-  await supabase.from("voice_profiles").upsert({
-    user_id: input.voiceProfile.userId,
-    sample_audio_url: input.voiceProfile.sampleAudioUrl,
-    sample_storage_path: input.voiceProfile.sampleStoragePath,
-    voice_embedding_id: input.voiceProfile.voiceEmbeddingId,
-    enrollment_status: input.voiceProfile.enrollmentStatus
-  }, { onConflict: "user_id" });
+  await upsertProfileToSupabase(input.profile);
+  await upsertVoiceProfileToSupabase(input.voiceProfile);
 
   await supabase.from("onboarding_self_checks").insert({
     user_id: input.selfCheck.userId,
     answers: input.selfCheck.answers,
     initial_type_scores: input.selfCheck.initialTypeScores
   });
+}
+
+async function saveQuestionStateToSupabase(input: {
+  profile: UserProfile;
+  selfCheck: OnboardingSelfCheck;
+}) {
+  if (!isSupabaseConfigured || input.profile.userId === "local-demo-user") return;
+  await upsertProfileToSupabase(input.profile);
+  const supabase = await createSupabaseBrowserClient();
+  if (!supabase) return;
+  await supabase.from("onboarding_self_checks").insert({
+    user_id: input.selfCheck.userId,
+    answers: input.selfCheck.answers,
+    initial_type_scores: input.selfCheck.initialTypeScores
+  });
+}
+
+async function upsertProfileToSupabase(profile: UserProfile) {
+  if (!isSupabaseConfigured || profile.userId === "local-demo-user") return;
+  const supabase = await createSupabaseBrowserClient();
+  if (!supabase) return;
+  await supabase.from("user_profiles").upsert({
+    user_id: profile.userId,
+    nickname: profile.nickname,
+    primary_goal: profile.primaryGoal,
+    main_pain_points: profile.mainPainPoints,
+    onboarding_completed: profile.onboardingCompleted,
+    onboarding_completed_at: profile.onboardingCompletedAt ?? null
+  }, { onConflict: "user_id" });
+}
+
+async function upsertVoiceProfileToSupabase(voiceProfile: VoiceProfile) {
+  if (!isSupabaseConfigured || voiceProfile.userId === "local-demo-user") return;
+  const supabase = await createSupabaseBrowserClient();
+  if (!supabase) return;
+  await supabase.from("voice_profiles").upsert({
+    user_id: voiceProfile.userId,
+    sample_audio_url: voiceProfile.sampleAudioUrl,
+    sample_storage_path: voiceProfile.sampleStoragePath,
+    voice_embedding_id: voiceProfile.voiceEmbeddingId,
+    enrollment_status: voiceProfile.enrollmentStatus
+  }, { onConflict: "user_id" });
 }
 
 function buildInitialScores(mainPainPoints: MainPainPoint[], answers: Record<string, string | number | boolean>): CauseScores {
@@ -205,6 +345,8 @@ function hydrateUserProfile(row: Record<string, unknown>): UserProfile {
     nickname: String(row.nickname ?? "발표 연습자"),
     primaryGoal: String(row.primary_goal ?? "presentation") as PrimaryGoal,
     mainPainPoints: Array.isArray(row.main_pain_points) ? row.main_pain_points as MainPainPoint[] : [],
+    onboardingCompleted: row.onboarding_completed === true,
+    onboardingCompletedAt: typeof row.onboarding_completed_at === "string" ? row.onboarding_completed_at : null,
     createdAt: String(row.created_at ?? new Date().toISOString())
   };
 }
@@ -230,4 +372,25 @@ function hydrateSelfCheck(row: Record<string, unknown>): OnboardingSelfCheck {
     initialTypeScores: (row.initial_type_scores ?? {}) as CauseScores,
     createdAt: String(row.created_at ?? new Date().toISOString())
   };
+}
+
+function resolveResumeStep(input: {
+  profile: UserProfile | null;
+  voiceProfile: VoiceProfile | null;
+  selfCheck: OnboardingSelfCheck | null;
+}) {
+  if (!input.profile) return 1;
+  if (!hasCompletedQuestions(input.profile, input.selfCheck)) return 2;
+  if (!input.voiceProfile) return 5;
+  return 6;
+}
+
+function hasCompletedQuestions(profile: UserProfile, selfCheck: OnboardingSelfCheck | null) {
+  return Boolean(
+    profile.primaryGoal &&
+    profile.mainPainPoints.length > 0 &&
+    selfCheck?.answers.help_context &&
+    selfCheck.answers.difficulty &&
+    selfCheck.answers.improvement_goal
+  );
 }

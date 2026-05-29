@@ -5,7 +5,7 @@ import type React from "react";
 import { useRouter } from "next/navigation";
 import { AuthPanel } from "@/components/AuthPanel";
 import { createAudioRecorder, mediaRecorderUnavailableMessage } from "@/services/audioRecording";
-import { saveOnboarding } from "@/services/profileService";
+import { getOnboardingStatus, saveOnboarding, saveOnboardingQuestions, saveProfileSetup, saveVoiceProfileStep } from "@/services/profileService";
 import type { CauseScoreAliases, MainPainPoint, PrimaryGoal } from "@/types/speech";
 
 const situationOptions: Array<{ id: PrimaryGoal; title: string; body: string; pain: MainPainPoint }> = [
@@ -43,6 +43,7 @@ export function OnboardingFlow() {
   const [voiceStatus, setVoiceStatus] = useState("선택 사항");
   const [voiceBars, setVoiceBars] = useState<number[]>(Array.from({ length: 24 }, (_, index) => 16 + (index % 6) * 6));
   const [isSaving, setIsSaving] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -58,6 +59,37 @@ export function OnboardingFlow() {
     return () => stopVoiceVisualizer();
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    getOnboardingStatus().then((status) => {
+      if (!mounted) return;
+      if (status.onboardingCompleted) {
+        router.replace("/");
+        return;
+      }
+      if (status.profile) {
+        setNickname(status.profile.nickname);
+        setPrimaryGoal(status.profile.primaryGoal);
+        setMainPainPoints(status.profile.mainPainPoints);
+      }
+      if (status.selfCheck?.answers) {
+        const restoredAnswers = Object.fromEntries(
+          Object.entries(status.selfCheck.answers).map(([key, value]) => [key, String(value)])
+        );
+        setAnswers(restoredAnswers);
+      }
+      if (status.voiceProfile) {
+        setVoiceSampleUrl(status.voiceProfile.sampleAudioUrl ?? "mock://voice-sample");
+        setVoiceStatus(status.voiceProfile.enrollmentStatus === "sample_saved" ? "샘플 저장됨" : "voice profile 준비됨");
+      }
+      setStep(status.profile || status.selfCheck || status.voiceProfile ? status.nextStep : 0);
+      setIsHydrating(false);
+    }).catch(() => setIsHydrating(false));
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
   const initialScores = useMemo(() => estimateInitialScores(mainPainPoints, answers), [mainPainPoints, answers]);
   const topInitial = Object.entries(initialScores).sort((a, b) => b[1] - a[1]).slice(0, 2);
   const totalSteps = 7;
@@ -70,6 +102,36 @@ export function OnboardingFlow() {
 
   function goNext() {
     setStep((value) => Math.min(totalSteps - 1, value + 1));
+  }
+
+  async function handleNext() {
+    setIsSaving(true);
+    try {
+      if (step === 1) await saveProfileSetup({ nickname: nickname.trim() || "나의 Commudent profile" });
+      if (step === 4) {
+        await saveOnboardingQuestions({
+          nickname: nickname.trim() || "나의 Commudent profile",
+          primaryGoal: primaryGoal ?? "presentation",
+          mainPainPoints: mainPainPoints.length > 0 ? mainPainPoints : ["many_fillers"],
+          selfCheckAnswers: {
+            ...answers,
+            profile_name: nickname,
+            primary_goal: primaryGoal ?? "presentation",
+            selected_pain_points: mainPainPoints.join(",")
+          }
+        });
+      }
+      if (step === 5) {
+        await saveVoiceProfileStep({
+          voiceSampleUrl: voiceSampleUrl ?? "mock://voice-sample",
+          voiceSampleBlob,
+          voiceDurationSeconds: Math.max(durationSeconds, 20)
+        });
+      }
+      goNext();
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function chooseSituation(option: (typeof situationOptions)[number]) {
@@ -174,7 +236,15 @@ export function OnboardingFlow() {
         selected_pain_points: mainPainPoints.join(",")
       }
     });
-    router.replace("/record");
+    router.replace("/");
+  }
+
+  if (isHydrating) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-sm font-black text-slate-300">
+        Commudent onboarding 상태를 확인하는 중입니다.
+      </div>
+    );
   }
 
   return (
@@ -206,7 +276,13 @@ export function OnboardingFlow() {
                 </label>
                 <div className="space-y-5">
                   <Suspense fallback={<div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 text-sm font-bold text-slate-300">로그인 화면을 준비하는 중입니다.</div>}>
-                    <AuthPanel compact />
+                    <AuthPanel
+                      compact
+                      onAuthSuccess={(status) => {
+                        if (status.onboardingCompleted) router.replace("/");
+                        else setStep(status.nextStep);
+                      }}
+                    />
                   </Suspense>
                   <ModelNotice />
                 </div>
@@ -297,7 +373,7 @@ export function OnboardingFlow() {
                 ))}
               </div>
               <button type="button" onClick={complete} disabled={isSaving} className="mt-7 h-12 rounded-lg bg-teal-300 px-6 text-sm font-black text-slate-950 disabled:opacity-60">
-                {isSaving ? "분석 공간 저장 중" : "첫 녹음 시작하기"}
+                {isSaving ? "분석 공간 저장 중" : "Commudent 시작하기"}
               </button>
             </StepShell>
           ) : null}
@@ -316,11 +392,11 @@ export function OnboardingFlow() {
             {step < totalSteps - 1 ? (
               <button
                 type="button"
-                onClick={goNext}
-                disabled={nextDisabled}
+                onClick={handleNext}
+                disabled={nextDisabled || isSaving}
                 className="h-11 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
               >
-                {step === 0 ? "나의 말습관 분석 시작하기" : "다음"}
+                {isSaving ? "저장 중" : step === 0 ? "나의 말습관 분석 시작하기" : "다음"}
               </button>
             ) : null}
           </div>

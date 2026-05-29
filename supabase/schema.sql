@@ -30,6 +30,8 @@ create table public.user_profiles (
   nickname text not null,
   primary_goal text not null check (primary_goal in ('presentation', 'interview', 'meeting', 'daily', 'class_discussion', 'other')),
   main_pain_points text[] not null default '{}',
+  onboarding_completed boolean not null default false,
+  onboarding_completed_at timestamptz,
   created_at timestamptz not null default now(),
   constraint user_profiles_user_unique unique (user_id)
 );
