@@ -3,3 +3,4 @@ node_modules
 outputs
 .env.local
 .DS_Store
+.vercel
