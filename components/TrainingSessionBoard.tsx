@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { causeDefinitions } from "@/services/causeInferenceService";
 import { getUserProfile } from "@/services/profileService";
 import { saveTrainingSession } from "@/services/trainingService";
 import type { CauseType, TrainingType } from "@/types/speech";
@@ -19,42 +18,42 @@ const trainings: TrainingConfig[] = [
   {
     type: "pause_replacement",
     targetCause: "habitual_pattern",
-    title: "Pause Replacement Training",
-    prompt: "이 서비스가 왜 필요한지 20초 안에 설명해보세요.",
-    flow: ["자주 쓰는 filler 확인", "짧은 문장 프롬프트 읽기", "filler가 나오면 다시 시도", "filler 대신 1초 침묵이면 성공"],
-    successRule: "음/어/약간/그니까 없이 답변하면 성공"
+    title: "핵심 문장 강조 연습",
+    prompt: "첫 슬라이드의 핵심 내용을 20초 안에 한 문장으로 설명해보세요.",
+    flow: ["슬라이드 핵심 내용 확인", "핵심 문장 작성", "한 박자 쉬고 읽기", "같은 결론어로 마무리"],
+    successRule: "핵심 문장이 처음과 끝에 모두 보이면 성공"
   },
   {
     type: "structure_training",
     targetCause: "discourse_structure",
-    title: "PREP Structure Training",
-    prompt: "AI 말습관 코치가 필요한 이유를 PREP 순서로 답하세요.",
-    flow: ["Point 작성", "Reason 작성", "Example 작성", "Point로 다시 마무리", "누락된 구조 표시"],
-    successRule: "PREP 네 요소가 모두 보이면 성공"
+    title: "슬라이드-결론 연결 연습",
+    prompt: "두 번째 슬라이드가 발표 전체 결론에 왜 필요한지 설명해보세요.",
+    flow: ["슬라이드 제목 확인", "근거 한 문장 작성", "전체 결론과 연결", "전환 문장으로 마무리"],
+    successRule: "슬라이드 내용과 전체 결론이 함께 보이면 성공"
   },
   {
     type: "slow_speech",
     targetCause: "delivery_regulation",
-    title: "Slow Speech Training",
-    prompt: "30초 동안 천천히 설명하고 목표 WPM에 맞춰보세요.",
-    flow: ["목표 WPM 설정", "30초 말하기", "실제 WPM 계산", "빠른 구간 표시", "다음 라운드에서 속도 낮추기"],
-    successRule: "목표 WPM과 15 이내 차이면 성공"
+    title: "천천히 전달할 구간 연습",
+    prompt: "청중이 꼭 기억해야 할 문장을 천천히 읽는다고 생각하고 작성해보세요.",
+    flow: ["핵심 문장 선택", "직전 쉬어가기 표시", "천천히 읽을 문장 작성", "다음 슬라이드 연결"],
+    successRule: "핵심 문장 앞뒤에 쉬어가기 표시가 있으면 성공"
   },
   {
     type: "anxiety_training",
     targetCause: "anxiety_pressure",
-    title: "Anxiety Start Routine",
-    prompt: "첫 문장을 천천히 세 번 반복한 뒤 20초 발표를 시작하세요.",
-    flow: ["30초 호흡", "첫 문장 3회 반복", "20초 발표 시작 연습", "초반 filler 변화 확인"],
-    successRule: "첫 문장 입력과 안정감 점수 선택 시 완료"
+    title: "도입 핵심 내용 고정",
+    prompt: "발표 시작 15초 안에 말할 첫 핵심 문장을 작성해보세요.",
+    flow: ["발표 전체 결론 확인", "첫 문장 작성", "청중 기억 단어 표시", "도입에서 한 번 더 반복"],
+    successRule: "발표 전체 결론이 첫 문장에 포함되면 성공"
   },
   {
     type: "script_delivery",
     targetCause: "cognitive_load",
-    title: "Script Delivery Training",
-    prompt: "대본을 넣고 pause mark와 강조 문장을 확인하세요.",
-    flow: ["대본 입력", "강조 문장 표시", "pause 위치 삽입", "예상 발표 시간 계산", "실제 녹음과 비교"],
-    successRule: "대본과 빠뜨린 내용 메모를 입력하면 완료"
+    title: "수정 대본 표시 연습",
+    prompt: "[강조], [잠깐 쉬기], [결론과 연결] 표시를 넣어 대본 한 단락을 고쳐보세요.",
+    flow: ["대본 단락 선택", "강조 표시", "쉬어가기 표시", "결론 연결 표시", "다음 녹음에서 확인"],
+    successRule: "세 가지 표시가 모두 들어가면 완료"
   }
 ];
 
@@ -71,7 +70,7 @@ export function TrainingSessionBoard() {
     const estimatedWpm = Math.max(70, Math.min(165, Math.round(answer.length * 1.8)));
     const success =
       active.type === "pause_replacement"
-        ? !hasFiller && answer.length > 8
+        ? answer.length > 8
         : active.type === "slow_speech"
           ? Math.abs(estimatedWpm - targetWpm) <= 15
           : answer.length > 8;
@@ -113,9 +112,9 @@ export function TrainingSessionBoard() {
       </aside>
 
       <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-normal text-marine">{causeDefinitions[active.targetCause].label}</p>
+        <p className="text-xs font-black uppercase tracking-normal text-marine">Presentation practice</p>
         <h1 className="mt-2 text-2xl font-black text-ink">{active.title}</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{causeDefinitions[active.targetCause].description}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">슬라이드별 핵심 내용이 실제 발표에서 빠지지 않도록, 강조와 연결 문장을 짧게 연습합니다.</p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {active.flow.map((item, index) => (
@@ -144,7 +143,7 @@ export function TrainingSessionBoard() {
             setAnswer(event.target.value);
             setResult(null);
           }}
-          placeholder="연습 답변을 입력하면 filler, 구조, WPM 추정값으로 결과를 저장합니다."
+          placeholder="연습 문장을 입력하면 다음 발표 준비 기록으로 저장합니다."
           className="mt-5 min-h-32 w-full rounded-lg border border-line p-3 text-sm leading-6 outline-none focus:border-marine focus:ring-2 focus:ring-teal-100"
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">

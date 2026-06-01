@@ -94,7 +94,7 @@ export async function analyzeSpeech(input: {
       pauseChangePercent: 0,
       structureScore: extracted.structureScore,
       clarityScore: extracted.clarityScore,
-      patternSummary: "장기 리포트는 녹음 기반 분석 결과가 누적될수록 filler, 원인 후보, 표현력 변화를 비교합니다."
+      patternSummary: "장기 리포트는 발표 기록이 누적될수록 핵심 내용 전달도와 다음 발표 초점을 비교합니다."
     }
   };
 }

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { coachScript } from "@/services/coachingService";
 
 const defaultScript =
-  "음 저는 약간 이 서비스가 사용자 경험을 개선할 수 있다고 생각합니다. 그니까 발표자는 자신의 말습관을 정확히 알기 어렵고, 그래서 데이터를 기반으로 원인 후보를 확인해야 합니다. 마지막으로 사용자가 바로 연습할 수 있는 맞춤 훈련이 필요합니다.";
+  "Commudent는 발표 자료와 대본을 바탕으로 발표의 핵심 내용을 먼저 정리합니다. 이후 사용자가 연습 녹음을 하면 각 슬라이드와 발표 전체에서 그 핵심 내용이 실제로 잘 전달되었는지 확인합니다. 강조, 속도, 어휘 피드백은 핵심 내용 전달을 돕는 보조 기준으로 사용합니다.";
 
 export function ScriptCoach() {
   const [script, setScript] = useState(defaultScript);

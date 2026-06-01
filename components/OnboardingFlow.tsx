@@ -1,41 +1,22 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { useRouter } from "next/navigation";
-import { AuthPanel } from "@/components/AuthPanel";
 import { createAudioRecorder, mediaRecorderUnavailableMessage } from "@/services/audioRecording";
-import { getOnboardingStatus, saveOnboarding, saveOnboardingQuestions, saveProfileSetup, saveVoiceProfileStep } from "@/services/profileService";
-import type { CauseScoreAliases, MainPainPoint, PrimaryGoal } from "@/types/speech";
+import { getOnboardingStatus, saveOnboarding, saveProfileSetup, saveVoiceProfileStep } from "@/services/profileService";
+import type { MainPainPoint, PrimaryGoal } from "@/types/speech";
 
-const situationOptions: Array<{ id: PrimaryGoal; title: string; body: string; pain: MainPainPoint }> = [
-  { id: "presentation", title: "발표", body: "청중 앞에서 핵심을 안정적으로 전달하고 싶어요.", pain: "blank_mind" },
-  { id: "interview", title: "면접", body: "평가 상황에서 답변을 더 분명하게 만들고 싶어요.", pain: "too_long" },
-  { id: "meeting", title: "회의", body: "업무 맥락에서 짧고 정확하게 의견을 말하고 싶어요.", pain: "disorganized" },
-  { id: "daily", title: "일상 대화", body: "평소 반복 표현과 말습관을 알고 싶어요.", pain: "many_fillers" },
-  { id: "class_discussion", title: "수업/토론", body: "토론 중 구조와 전달력을 개선하고 싶어요.", pain: "fast_speech" }
-];
-
-const difficultyOptions: Array<{ id: MainPainPoint; title: string; body: string }> = [
-  { id: "blank_mind", title: "긴장하면 머리가 하얘진다", body: "초반 발화가 흔들리거나 말문이 늦게 열려요." },
-  { id: "disorganized", title: "생각은 있는데 말로 정리가 안 된다", body: "말하는 중에 구조가 뒤늦게 잡혀요." },
-  { id: "too_long", title: "말이 길어지고 결론이 늦어진다", body: "핵심 전에 설명이 길어져요." },
-  { id: "many_fillers", title: "특정 표현을 반복한다", body: "음/어/약간 또는 같은 표현이 반복돼요." },
-  { id: "fast_speech", title: "말이 너무 빠르거나 전달이 잘 안 된다", body: "청자가 따라왔는지 확신하기 어려워요." },
-  { id: "weak_delivery", title: "적절한 표현이 잘 떠오르지 않는다", body: "의미는 있는데 단어 선택이 모호해져요." }
-];
-
-const goalOptions = ["발표 긴장 완화", "생각 정리", "구조화", "반복 표현 줄이기", "전달력 향상", "어휘/표현력 향상"];
 const voicePrompt =
-  "안녕하세요. 이 샘플은 이후 대화 녹음에서 제 발화를 중심으로 분석하기 위한 기준입니다. Commudent는 녹음 데이터를 바탕으로 말습관과 전달 패턴을 분석합니다.";
+  "안녕하세요. 이 샘플은 발표 연습 녹음에서 제 발화를 더 잘 인식하기 위한 기준입니다. Commudent는 발표 자료와 대본의 핵심 내용을 기준으로 전달 여부를 확인합니다.";
+
+const defaultPrimaryGoal: PrimaryGoal = "presentation";
+const defaultPainPoints: MainPainPoint[] = ["weak_delivery"];
 
 export function OnboardingFlow() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [nickname, setNickname] = useState("나의 Commudent profile");
-  const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal | null>(null);
-  const [mainPainPoints, setMainPainPoints] = useState<MainPainPoint[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [voiceSampleUrl, setVoiceSampleUrl] = useState<string | null>(null);
@@ -69,20 +50,12 @@ export function OnboardingFlow() {
       }
       if (status.profile) {
         setNickname(status.profile.nickname);
-        setPrimaryGoal(status.profile.primaryGoal);
-        setMainPainPoints(status.profile.mainPainPoints);
-      }
-      if (status.selfCheck?.answers) {
-        const restoredAnswers = Object.fromEntries(
-          Object.entries(status.selfCheck.answers).map(([key, value]) => [key, String(value)])
-        );
-        setAnswers(restoredAnswers);
       }
       if (status.voiceProfile) {
         setVoiceSampleUrl(status.voiceProfile.sampleAudioUrl ?? "mock://voice-sample");
         setVoiceStatus(status.voiceProfile.enrollmentStatus === "sample_saved" ? "샘플 저장됨" : "voice profile 준비됨");
       }
-      setStep(status.profile || status.selfCheck || status.voiceProfile ? status.nextStep : 0);
+      setStep(resolveOnboardingStep(status));
       setIsHydrating(false);
     }).catch(() => setIsHydrating(false));
     return () => {
@@ -90,15 +63,9 @@ export function OnboardingFlow() {
     };
   }, [router]);
 
-  const initialScores = useMemo(() => estimateInitialScores(mainPainPoints, answers), [mainPainPoints, answers]);
-  const topInitial = Object.entries(initialScores).sort((a, b) => b[1] - a[1]).slice(0, 2);
-  const totalSteps = 7;
+  const totalSteps = 4;
   const progress = Math.round(((step + 1) / totalSteps) * 100);
-  const nextDisabled =
-    (step === 1 && nickname.trim().length < 2) ||
-    (step === 2 && !primaryGoal) ||
-    (step === 3 && mainPainPoints.length === 0) ||
-    (step === 4 && !answers.improvement_goal);
+  const nextDisabled = step === 1 && nickname.trim().length < 2;
 
   function goNext() {
     setStep((value) => Math.min(totalSteps - 1, value + 1));
@@ -108,20 +75,7 @@ export function OnboardingFlow() {
     setIsSaving(true);
     try {
       if (step === 1) await saveProfileSetup({ nickname: nickname.trim() || "나의 Commudent profile" });
-      if (step === 4) {
-        await saveOnboardingQuestions({
-          nickname: nickname.trim() || "나의 Commudent profile",
-          primaryGoal: primaryGoal ?? "presentation",
-          mainPainPoints: mainPainPoints.length > 0 ? mainPainPoints : ["many_fillers"],
-          selfCheckAnswers: {
-            ...answers,
-            profile_name: nickname,
-            primary_goal: primaryGoal ?? "presentation",
-            selected_pain_points: mainPainPoints.join(",")
-          }
-        });
-      }
-      if (step === 5) {
+      if (step === 2) {
         await saveVoiceProfileStep({
           voiceSampleUrl: voiceSampleUrl ?? "mock://voice-sample",
           voiceSampleBlob,
@@ -132,17 +86,6 @@ export function OnboardingFlow() {
     } finally {
       setIsSaving(false);
     }
-  }
-
-  function chooseSituation(option: (typeof situationOptions)[number]) {
-    setPrimaryGoal(option.id);
-    setAnswers((current) => ({ ...current, help_context: option.title }));
-    setMainPainPoints((current) => unique([...current, option.pain]));
-  }
-
-  function togglePainPoint(point: MainPainPoint, label: string) {
-    setAnswers((current) => ({ ...current, difficulty: label }));
-    setMainPainPoints((current) => (current.includes(point) ? current.filter((item) => item !== point) : unique([...current, point])));
   }
 
   function stopVoiceVisualizer() {
@@ -224,16 +167,16 @@ export function OnboardingFlow() {
     setIsSaving(true);
     await saveOnboarding({
       nickname: nickname.trim() || "나의 Commudent profile",
-      primaryGoal: primaryGoal ?? "presentation",
-      mainPainPoints: mainPainPoints.length > 0 ? mainPainPoints : ["many_fillers"],
+      primaryGoal: defaultPrimaryGoal,
+      mainPainPoints: defaultPainPoints,
       voiceSampleUrl: voiceSampleUrl ?? "mock://voice-sample",
       voiceSampleBlob,
       voiceDurationSeconds: Math.max(durationSeconds, 20),
       selfCheckAnswers: {
-        ...answers,
         profile_name: nickname,
-        primary_goal: primaryGoal ?? "presentation",
-        selected_pain_points: mainPainPoints.join(",")
+        primary_goal: defaultPrimaryGoal,
+        selected_pain_points: defaultPainPoints.join(","),
+        onboarding_focus: "core_content_delivery"
       }
     });
     router.replace("/");
@@ -263,7 +206,7 @@ export function OnboardingFlow() {
         <section className="flex flex-1 items-center py-4">
           {step === 0 ? <WelcomeStep onStart={goNext} /> : null}
           {step === 1 ? (
-            <StepShell eyebrow="Profile setup" title="당신의 communication profile을 설정합니다" subtitle="Commudent는 녹음 데이터를 기반으로 장기적인 전달 패턴 변화를 기록합니다.">
+            <StepShell eyebrow="Setup" title="발표 연습 기록을 시작합니다" subtitle="계정 승인 없이 바로 사용할 수 있습니다. 이름만 정하면 발표 자료, 대본, 녹음, 피드백이 이 브라우저에 저장됩니다.">
               <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
                 <label className="rounded-lg border border-white/10 bg-white/[0.04] p-5 text-sm font-black text-slate-300">
                   Profile name
@@ -275,56 +218,14 @@ export function OnboardingFlow() {
                   <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">이 이름으로 리포트와 장기 분석 기록이 저장됩니다.</p>
                 </label>
                 <div className="space-y-5">
-                  <Suspense fallback={<div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 text-sm font-bold text-slate-300">로그인 화면을 준비하는 중입니다.</div>}>
-                    <AuthPanel
-                      compact
-                      onAuthSuccess={(status) => {
-                        if (status.onboardingCompleted) router.replace("/");
-                        else setStep(status.nextStep);
-                      }}
-                    />
-                  </Suspense>
-                  <ModelNotice />
+                  <PublicAccessNotice />
+                  <SetupNotice />
                 </div>
               </div>
             </StepShell>
           ) : null}
           {step === 2 ? (
-            <ChoiceStep
-              eyebrow="Context"
-              title="어떤 상황에서 가장 도움을 받고 싶나요?"
-              subtitle="상황 정보는 첫 분석의 참고값으로만 사용되며, 실제 결과는 녹음 데이터가 우선합니다."
-              options={situationOptions}
-              active={(option) => primaryGoal === option.id}
-              onSelect={chooseSituation}
-            />
-          ) : null}
-          {step === 3 ? (
-            <ChoiceStep
-              eyebrow="Difficulty"
-              title="말할 때 가장 자주 느끼는 어려움은 무엇인가요?"
-              subtitle="여러 개를 선택할 수 있습니다. 온보딩만으로 사용자를 단정하지 않습니다."
-              options={difficultyOptions}
-              active={(option) => mainPainPoints.includes(option.id)}
-              onSelect={(option) => togglePainPoint(option.id, option.title)}
-            />
-          ) : null}
-          {step === 4 ? (
-            <OptionStep
-              eyebrow="Goal"
-              title="가장 먼저 개선하고 싶은 목표는 무엇인가요?"
-              subtitle="목표는 훈련 추천의 우선순위를 정하는 데 사용됩니다."
-              options={goalOptions}
-              value={answers.improvement_goal}
-              onSelect={(value) => {
-                setAnswers((current) => ({ ...current, improvement_goal: value }));
-                const point = goalToPainPoint(value);
-                if (point) setMainPainPoints((current) => unique([...current, point]));
-              }}
-            />
-          ) : null}
-          {step === 5 ? (
-            <StepShell eyebrow="Voice profile" title="내 발화 중심 분석을 준비합니다" subtitle="여러 사람 대화 속에서도 이후에는 내 발화 중심으로 분석하기 위한 준비 단계입니다.">
+            <StepShell eyebrow="Voice sample" title="음성 인식 준비" subtitle="선택 단계입니다. 발표 연습 녹음에서 내 발화를 더 안정적으로 인식하는 데 사용합니다.">
               <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
                 <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
                   <p className="text-sm font-semibold leading-7 text-slate-300">{voicePrompt}</p>
@@ -361,19 +262,22 @@ export function OnboardingFlow() {
               </div>
             </StepShell>
           ) : null}
-          {step === 6 ? (
-            <StepShell eyebrow="Ready" title="첫 녹음을 시작하면 Commudent가 당신의 말하기 패턴을 분석합니다" subtitle="녹음 후 self-check, feature extraction, weighted inference, feedback generation이 순서대로 실행됩니다.">
-              <div className="grid gap-4 md:grid-cols-2">
-                {topInitial.map(([key, value]) => (
-                  <div key={key} className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
-                    <p className="text-sm font-black text-teal-200">{initialLabel(key)}</p>
-                    <p className="mt-2 text-3xl font-black">{Math.round(value * 100)}%</p>
-                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">초기 참고값입니다. 실제 원인 점수는 녹음 분석 결과가 우선합니다.</p>
+          {step === 3 ? (
+            <StepShell eyebrow="Ready" title="발표 자료와 대본을 넣고 핵심 내용 전달을 연습하세요" subtitle="Commudent는 슬라이드별 핵심 내용을 먼저 정리하고, 연습 피드백에서 각 슬라이드와 전체 발표가 그 내용을 충분히 전달했는지 확인합니다.">
+              <div className="grid gap-4 md:grid-cols-3">
+                {[
+                  ["자료 입력", "슬라이드와 발표 대본을 함께 등록합니다."],
+                  ["핵심 내용 정리", "AI가 슬라이드별로 꼭 전달해야 할 내용을 잡습니다."],
+                  ["연습 피드백", "녹음 후 슬라이드별/전체 전달 여부를 확인합니다."]
+                ].map(([title, body]) => (
+                  <div key={title} className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+                    <p className="text-sm font-black text-teal-200">{title}</p>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">{body}</p>
                   </div>
                 ))}
               </div>
               <button type="button" onClick={complete} disabled={isSaving} className="mt-7 h-12 rounded-lg bg-teal-300 px-6 text-sm font-black text-slate-950 disabled:opacity-60">
-                {isSaving ? "분석 공간 저장 중" : "Commudent 시작하기"}
+                {isSaving ? "연습 공간 저장 중" : "Commudent 시작하기"}
               </button>
             </StepShell>
           ) : null}
@@ -396,7 +300,7 @@ export function OnboardingFlow() {
                 disabled={nextDisabled || isSaving}
                 className="h-11 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
               >
-                {isSaving ? "저장 중" : step === 0 ? "나의 말습관 분석 시작하기" : "다음"}
+                {isSaving ? "저장 중" : "다음"}
               </button>
             ) : null}
           </div>
@@ -409,51 +313,37 @@ export function OnboardingFlow() {
 function WelcomeStep({ onStart }: { onStart: () => void }) {
   return (
     <div className="w-full">
-      <div className="grid gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
-      <section>
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-200">COMMUNICATION ANALYSIS & COACHING</p>
-        <h1 className="mt-5 text-4xl font-black leading-tight tracking-normal text-white sm:text-5xl lg:text-6xl">Commudent</h1>
-        <p className="mt-4 max-w-2xl text-2xl font-black leading-snug text-slate-100 sm:text-3xl">말과 전달 사이의 차이를, 함께 좁혀갑니다.</p>
-      </section>
-      <AnalysisPipeline />
-      </div>
-      <div className="mt-8 flex flex-col items-center text-center">
-        <button type="button" onClick={onStart} className="group border-b border-teal-300 pb-2 text-base font-black text-teal-200 transition hover:border-teal-100 hover:text-white">
-          Commudent 시작하기 <span className="inline-block transition group-hover:translate-x-1">→</span>
-        </button>
-        <p className="mt-4 max-w-xl text-sm font-semibold leading-7 text-slate-400">
-          Commudent는 녹음된 발화를 바탕으로 말습관, 전달 속도, 구조화 방식, 표현 패턴을 분석합니다.
-        </p>
+      <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+        <section>
+          <h1 className="max-w-4xl text-5xl font-black leading-tight tracking-normal text-white sm:text-6xl lg:text-7xl">Commudent</h1>
+          <p className="mt-5 max-w-2xl text-lg font-black leading-8 text-slate-300 sm:text-xl">
+            말과 전달 사이의 차이를 줄여주는 발표 지원 서비스
+          </p>
+          <button type="button" onClick={onStart} className="mt-8 h-12 rounded-lg bg-teal-300 px-6 text-sm font-black text-slate-950">
+            Commudent 시작하기
+          </button>
+        </section>
+        <aside className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs font-black uppercase tracking-normal text-teal-200">Flow</p>
+          <div className="mt-5 space-y-3">
+            {[
+              ["자료 입력", "발표 자료 파일과 대본을 등록합니다."],
+              ["핵심 내용 파악", "AI가 슬라이드별/전체 발표 핵심 내용을 정리합니다."],
+              ["연습 녹음", "핵심 내용이 실제로 전달됐는지 기준을 잡고 연습합니다."],
+              ["다음 발표 연결", "피드백을 발표 이력으로 저장해 다음 준비에 사용합니다."]
+            ].map(([title, body], index) => (
+              <div key={title} className="grid grid-cols-[36px_1fr] gap-3 rounded-lg border border-white/10 bg-slate-950/40 p-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-300 text-xs font-black text-slate-950">{index + 1}</span>
+                <span>
+                  <span className="block text-sm font-black text-white">{title}</span>
+                  <span className="mt-1 block text-sm font-semibold leading-6 text-slate-400">{body}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
-  );
-}
-
-function AnalysisPipeline() {
-  const steps = [
-    ["녹음", "발표, 면접, 회의, 대화 상황을 녹음합니다."],
-    ["Self-check", "녹음 직후 상황과 긴장도를 직접 입력합니다."],
-    ["Feature extraction", "filler, pause, 말속도, 문장 길이, 구조, 표현 다양성을 추출합니다."],
-    ["Weighted inference", "하나의 말습관을 단정하지 않고 여러 feature 조합으로 원인 가능성을 계산합니다."],
-    ["Feedback generation", "말습관, 전달력, 표현력 개선 방향과 다음 훈련을 제안합니다."],
-    ["Long-term report", "녹음 기반 결과를 누적해 변화 흐름을 기록합니다."]
-  ];
-  return (
-    <aside className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
-      <p className="text-xs font-black uppercase tracking-normal text-teal-200">How analysis works</p>
-      <h2 className="mt-2 text-2xl font-black text-white">분석은 이렇게 진행됩니다</h2>
-      <div className="mt-5 space-y-1">
-        {steps.map(([title, body], index) => (
-          <div key={title} className="grid grid-cols-[44px_1fr] gap-3 border-l border-white/10 py-3 pl-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-300/40 bg-slate-900 text-xs font-black text-teal-200">{index + 1}</span>
-            <span>
-              <span className="block text-sm font-black text-white">{title}</span>
-              <span className="mt-1 block text-sm font-semibold leading-6 text-slate-400">{body}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-    </aside>
   );
 }
 
@@ -468,112 +358,34 @@ function StepShell({ eyebrow, title, subtitle, children }: { eyebrow: string; ti
   );
 }
 
-function ChoiceStep<T extends { title: string; body: string }>({
-  eyebrow,
-  title,
-  subtitle,
-  options,
-  active,
-  onSelect
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
-  options: T[];
-  active: (option: T) => boolean;
-  onSelect: (option: T) => void;
-}) {
-  return (
-    <StepShell eyebrow={eyebrow} title={title} subtitle={subtitle}>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {options.map((option) => (
-          <SelectCard key={option.title} active={active(option)} title={option.title} body={option.body} onClick={() => onSelect(option)} />
-        ))}
-      </div>
-    </StepShell>
-  );
-}
-
-function OptionStep({ eyebrow, title, subtitle, options, value, onSelect }: { eyebrow: string; title: string; subtitle: string; options: string[]; value?: string; onSelect: (value: string) => void }) {
-  return (
-    <StepShell eyebrow={eyebrow} title={title} subtitle={subtitle}>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {options.map((option) => (
-          <button key={option} type="button" onClick={() => onSelect(option)} className={choiceClass(value === option)}>
-            {option}
-          </button>
-        ))}
-      </div>
-    </StepShell>
-  );
-}
-
-function SelectCard({ active, title, body, onClick }: { active: boolean; title: string; body: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className={`min-h-32 rounded-lg border p-4 text-left transition ${active ? "border-teal-300/70 bg-teal-300/10" : "border-white/10 bg-white/[0.04] hover:border-white/25"}`}>
-      <span className="block text-base font-black text-white">{title}</span>
-      <span className="mt-2 block text-sm font-semibold leading-6 text-slate-400">{body}</span>
-    </button>
-  );
-}
-
-function ModelNotice() {
+function SetupNotice() {
   return (
     <div className="rounded-lg border border-teal-300/20 bg-teal-300/10 p-5">
-      <p className="text-sm font-black text-teal-100">분석 모델 연결 방식</p>
+      <p className="text-sm font-black text-teal-100">피드백 기준</p>
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-300">
-        이 답변은 첫 분석의 참고값으로만 사용되며, 실제 결과는 녹음 데이터를 바탕으로 계산됩니다. 온보딩 정보는 cause inference에서 최대 0.08 bias로만 반영됩니다.
+        첫 연습부터 발표 자료와 대본의 핵심 내용 전달 여부를 기준으로 피드백합니다.
       </p>
     </div>
   );
 }
 
-function choiceClass(active: boolean) {
-  return `min-h-16 rounded-lg border px-4 text-left text-sm font-black transition ${
-    active ? "border-teal-300/70 bg-teal-300/10 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/25"
-  }`;
+function PublicAccessNotice() {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+      <p className="text-sm font-black text-white">공개 데모 모드</p>
+      <p className="mt-3 text-sm font-semibold leading-7 text-slate-300">
+        별도 로그인이나 운영자 승인 없이 서비스를 둘러보고 발표 연습을 시작할 수 있습니다. Supabase를 연결한 배포 환경에서는 로그인 사용자의 데이터만 클라우드에 저장되고, 비로그인 사용자는 로컬 저장소를 사용합니다.
+      </p>
+    </div>
+  );
 }
 
 function stepLabel(step: number) {
-  return ["Welcome", "Profile", "Context", "Difficulty", "Goal", "Voice", "Start"][step];
+  return ["Intro", "Setup", "Voice", "Start"][step];
 }
 
-function estimateInitialScores(points: MainPainPoint[], answers: Record<string, string>): CauseScoreAliases {
-  const answerText = Object.values(answers).join(" ");
-  return {
-    anxiety: clamp((points.includes("blank_mind") ? 0.46 : 0.16) + (answerText.includes("긴장") || answerText.includes("하얘") ? 0.18 : 0)),
-    cognitive_load: clamp((answerText.includes("정리") || answerText.includes("표현") ? 0.44 : 0.16) + (points.includes("blank_mind") ? 0.12 : 0)),
-    discourse: clamp((points.includes("disorganized") || points.includes("too_long") ? 0.46 : 0.16) + (answerText.includes("결론") || answerText.includes("두서") ? 0.18 : 0)),
-    habitual: clamp((points.includes("many_fillers") ? 0.46 : 0.16) + (answerText.includes("반복") || answerText.includes("음/어") ? 0.18 : 0)),
-    delivery: clamp((points.includes("fast_speech") || points.includes("weak_delivery") ? 0.46 : 0.16) + (answerText.includes("빠르") || answerText.includes("전달") ? 0.18 : 0))
-  };
-}
-
-function initialLabel(key: string) {
-  const labels: Record<string, string> = {
-    anxiety: "불안/평가압박 참고값",
-    cognitive_load: "인지부하 참고값",
-    discourse: "구조화 참고값",
-    habitual: "자동습관 참고값",
-    delivery: "전달조절 참고값"
-  };
-  return labels[key] ?? key;
-}
-
-function goalToPainPoint(goal: string): MainPainPoint | null {
-  if (goal.includes("긴장")) return "blank_mind";
-  if (goal.includes("정리")) return "disorganized";
-  if (goal.includes("구조")) return "too_long";
-  if (goal.includes("반복")) return "many_fillers";
-  if (goal.includes("전달")) return "fast_speech";
-  if (goal.includes("어휘") || goal.includes("표현")) return "weak_delivery";
-  return null;
-}
-
-function clamp(value: number) {
-  return Math.max(0.05, Math.min(0.92, value));
-}
-
-function unique<T>(items: T[]) {
-  return Array.from(new Set(items));
+function resolveOnboardingStep(status: Awaited<ReturnType<typeof getOnboardingStatus>>) {
+  if (!status.profile) return 0;
+  if (!status.voiceProfile) return 2;
+  return 3;
 }

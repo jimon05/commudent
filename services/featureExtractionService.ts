@@ -310,7 +310,7 @@ function countHesitations(transcript: string) {
 }
 
 function presentationContextScore(contextType: ContextType) {
-  if (["presentation", "interview", "class"].includes(contextType)) return 1;
+  if (["formal", "informal", "presentation", "interview", "class"].includes(contextType)) return 1;
   if (contextType === "meeting") return 0.5;
   return 0;
 }

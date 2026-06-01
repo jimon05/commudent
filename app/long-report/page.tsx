@@ -13,13 +13,13 @@ export default function LongReportPage() {
     listRecentReports().then(setReports);
   }, []);
 
-  const fillerTrend = reports.map((report) => Object.values(report.fillerCounts).reduce((sum, count) => sum + count, 0));
-  const repeatedTrend = reports.map((report) => report.repeatedExpressions.length);
-  const clarityTrend = reports.map((report) => report.clarityScore);
-  const lexicalTrend = reports.map((report) => report.lexicalReport?.lexicalDiversityScore ?? 0);
-  const causeTrend = reports.map((report) => report.causeCandidates[0]?.label ?? "특정 원인 낮음");
-  const trainingTrend = reports.map((report) => report.coachingPlan.recommendedTraining[0] ?? "structure_training");
-  const goodPoints = reports.flatMap((report) => report.goodPoints ?? []).slice(0, 6);
+  const deliveryTrend = reports.map((report) => report.deliveryScore);
+  const clearMessageTrend = reports.map((report) => report.messageResults?.filter((item) => item.status === "clear").length ?? 0);
+  const weakSlideTrend = reports.map((report) => report.slideDeliveryFeedback?.filter((item) => item.status !== "clear").length ?? 0);
+  const slideCountTrend = reports.map((report) => report.slideDeliveryFeedback?.length ?? 0);
+  const repeatedWeakness = reports.flatMap((report) => report.slideDeliveryFeedback ?? []).filter((item) => item.status !== "clear").map((item) => `${item.slideTitle}: ${item.suggestion}`);
+  const nextFocus = reports.map((report) => report.nextFocus ?? "다음 발표에서 핵심 내용 재강조");
+  const goodPoints = reports.flatMap((report) => report.savedInsights ?? []).slice(0, 6);
 
   return (
     <AuthGate>
@@ -32,25 +32,25 @@ export default function LongReportPage() {
               </Link>
               <h1 className="mt-3 text-3xl font-black tracking-normal text-ink sm:text-4xl">장기 성장 리포트</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                이 리포트는 녹음 기반 분석 결과 누적만 사용합니다. 스크립트 코칭 결과는 핵심 통계에 포함하지 않습니다.
+                발표가 발생할 때마다 핵심 내용 전달도, 약했던 슬라이드, 다음 발표 초점이 누적됩니다.
               </p>
             </div>
-            <Link href="/record" className="inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-bold text-white">
-              새 녹음
+            <Link href="/record?mode=prep" className="inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-bold text-white">
+              다음 발표 준비
             </Link>
           </header>
 
           <div className="grid gap-5 lg:grid-cols-2">
-            <TrendCard title="filler 변화 추이" values={fillerTrend} suffix="회" />
-            <TrendCard title="repeated expression 변화" values={repeatedTrend} suffix="개" />
-            <TrendCard title="clarity score 변화" values={clarityTrend} suffix="점" />
-            <TrendCard title="lexical diversity score 변화" values={lexicalTrend} suffix="점" />
+            <TrendCard title="핵심 내용 전달도 변화" values={deliveryTrend} suffix="점" />
+            <TrendCard title="명확히 전달된 핵심 내용" values={clearMessageTrend} suffix="개" />
+            <TrendCard title="보완 필요한 슬라이드" values={weakSlideTrend} suffix="개" />
+            <TrendCard title="분석된 슬라이드 수" values={slideCountTrend} suffix="장" />
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-3">
-            <ListCard title="top cause 변화" items={causeTrend} />
-            <ListCard title="훈련 추천 변화" items={trainingTrend} />
-            <ListCard title="잘한 점 누적" items={goodPoints.length ? goodPoints : ["녹음이 쌓이면 잘한 점이 누적됩니다."]} />
+            <ListCard title="반복적으로 약한 핵심 내용" items={repeatedWeakness.length ? repeatedWeakness : ["발표 이력이 쌓이면 반복 약점이 표시됩니다."]} />
+            <ListCard title="다음 발표 초점" items={nextFocus} />
+            <ListCard title="저장된 성장 인사이트" items={goodPoints.length ? goodPoints : ["발표 기록이 쌓이면 인사이트가 누적됩니다."]} />
           </div>
         </div>
       </main>

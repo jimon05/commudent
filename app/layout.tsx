@@ -3,10 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "AI 말습관 코치 MVP",
-    template: "%s | AI 말습관 코치 MVP"
+    default: "Commudent",
+    template: "%s | Commudent"
   },
-  description: "말습관 원인 후보를 추정하고 맞춤 훈련을 생성하는 발표 코칭 MVP."
+  description: "발표 자료, 대본, 녹음을 바탕으로 핵심 내용 전달 여부를 확인하고 발표 경험을 성장 데이터로 전환합니다."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

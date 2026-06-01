@@ -4,7 +4,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { TrainingSessionBoard } from "@/components/TrainingSessionBoard";
 
 export const metadata: Metadata = {
-  title: "Training Sessions"
+  title: "Presentation Practice"
 };
 
 export default function TrainingPage() {
@@ -17,13 +17,13 @@ export default function TrainingPage() {
             <Link href="/" className="text-sm font-bold text-slate-500 transition hover:text-ink">
               대시보드로
             </Link>
-            <h1 className="mt-3 text-3xl font-black tracking-normal text-ink sm:text-4xl">유형별 훈련 세션</h1>
+            <h1 className="mt-3 text-3xl font-black tracking-normal text-ink sm:text-4xl">발표 연습 세션</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              단순 피드백에서 끝나지 않고, 현재 가능성이 높은 원인 후보를 다음 연습 행동으로 바꿉니다.
+              발표 자료와 대본에서 잡은 핵심 내용을 다음 연습 행동으로 연결합니다.
             </p>
           </div>
-          <Link href="/record" className="inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-bold text-white">
-            녹음하기
+          <Link href="/record?mode=prep" className="inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-bold text-white">
+            발표 준비하기
           </Link>
         </header>
         <TrainingSessionBoard />

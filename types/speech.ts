@@ -1,4 +1,4 @@
-export type ContextType = "presentation" | "interview" | "class" | "meeting" | "daily" | "other";
+export type ContextType = "formal" | "informal" | "presentation" | "interview" | "class" | "meeting" | "daily" | "other";
 
 export type CauseType =
   | "anxiety_pressure"
@@ -55,6 +55,16 @@ export type SpeechReport = {
   recordingId: string;
   title: string;
   contextType: ContextType;
+  script?: string;
+  slides?: string;
+  timeLimit?: number;
+  extractedKeyMessages?: string[];
+  emphasisPoints?: string[];
+  prepCautions?: string[];
+  slideDeliveryFeedback?: SlideDeliveryFeedback[];
+  slideTranscripts?: SlideTranscript[];
+  overallDeliveryGoal?: string;
+  deliveryDimensionFeedback?: DeliveryDimensionFeedback[];
   transcript: string;
   durationSeconds: number;
   createdAt: string;
@@ -88,12 +98,73 @@ export type SpeechReport = {
   clarityScore: number;
   structureScore: number;
   deliveryScore: number;
+  messageResults?: MessageResult[];
+  sectionFeedback?: SectionFeedback[];
+  revisedScript?: string;
+  savedInsights?: string[];
+  nextFocus?: string;
   feedbackSummary: string;
   causeScores: CauseScores;
   causeCandidates: CauseCandidate[];
   coachingPlan: CoachingPlan;
   improvedVersion: string;
   weeklyTrend: WeeklyTrend;
+};
+
+export type PresentationPrepAnalysis = {
+  keyMessages: string[];
+  emphasisPoints: string[];
+  cautions: string[];
+  slides: PresentationSlide[];
+  overallDeliveryGoal: string;
+  provider?: "gemini";
+};
+
+export type PresentationSlide = {
+  index: number;
+  title: string;
+  content: string;
+  expectedMessage: string;
+  emphasisPoints?: string[];
+  emphasisPoint?: string;
+  paceSuggestion?: string;
+  vocabularySuggestion?: string;
+  rehearsalCaution?: string;
+};
+
+export type MessageResult = {
+  message: string;
+  status: "clear" | "partial" | "weak";
+  evidence: string;
+  suggestion: string;
+};
+
+export type SectionFeedback = {
+  section: string;
+  feedback: string;
+  suggestion: string;
+};
+
+export type SlideDeliveryFeedback = {
+  slideIndex: number;
+  slideTitle: string;
+  expectedMessage: string;
+  status: "clear" | "partial" | "weak";
+  evidence: string;
+  suggestion: string;
+};
+
+export type SlideTranscript = {
+  slideIndex: number;
+  slideTitle: string;
+  transcript: string;
+};
+
+export type DeliveryDimensionFeedback = {
+  dimension: "emphasis" | "speed" | "vocabulary";
+  label: string;
+  feedback: string;
+  suggestion: string;
 };
 
 export type FeatureReport = {
@@ -315,6 +386,16 @@ export type WeeklyTrend = {
 export type RecordingDraft = {
   title: string;
   contextType: ContextType;
+  script?: string;
+  slides?: string;
+  timeLimit?: number;
+  extractedKeyMessages?: string[];
+  emphasisPoints?: string[];
+  prepCautions?: string[];
+  slideTranscripts?: SlideTranscript[];
+  formalityLevel?: number;
+  slideDeliveryFeedback?: SlideDeliveryFeedback[];
+  overallDeliveryGoal?: string;
   durationSeconds: number;
   survey: PreSpeechSurveyInput;
   postSpeechSelfCheck?: PostSpeechSelfCheckInput;

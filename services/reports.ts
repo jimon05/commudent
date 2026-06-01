@@ -1,6 +1,7 @@
 import { mockReport } from "@/lib/mockData";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import { getOnboardingSelfCheck, getVoiceProfile } from "@/services/profileService";
+import { analyzePresentationDelivery, extractKeyMessages } from "@/services/presentationAnalysisService";
 import { analyzeSpeech } from "@/services/speechAnalysisService";
 import { filterUserSpeech, splitSpeakersMock } from "@/services/speakerService";
 import { transcribeAudio } from "@/services/sttService";
@@ -9,6 +10,8 @@ import { trainingRowsForStorage } from "@/services/trainingRecommendationService
 import type { LexicalReport, RecordingDraft, SpeechReport } from "@/types/speech";
 
 const storageKey = "speech-coach-reports";
+
+export { extractKeyMessages };
 
 function canUseStorage() {
   return typeof window !== "undefined" && window.localStorage;
@@ -58,13 +61,30 @@ export async function createSpeechReport(draft: RecordingDraft): Promise<SpeechR
     hasUserVoiceProfile: Boolean(voiceProfile),
     priorReports: readLocalReports()
   });
+  const slideTranscriptText = draft.slideTranscripts?.map((item) => `Slide ${item.slideIndex} ${item.slideTitle}: ${item.transcript}`).join("\n").trim();
+  const analysisTranscript = slideTranscriptText || transcript;
+  const messageDelivery = analyzePresentationDelivery({
+    script: draft.script,
+    slides: draft.slides,
+    transcript: analysisTranscript,
+    extractedKeyMessages: draft.extractedKeyMessages,
+    fallbackSummary: base.feedbackSummary,
+    deliveryScore: base.deliveryScore
+  });
   const report: SpeechReport = {
     ...base,
+    script: draft.script,
+    slides: draft.slides,
+    timeLimit: draft.timeLimit,
+    emphasisPoints: draft.emphasisPoints,
+    prepCautions: draft.prepCautions,
+    slideTranscripts: draft.slideTranscripts,
+    ...messageDelivery,
     audioUrl: audioFile.url,
     audioStoragePath: audioFile.storagePath,
     sttProvider: stt.provider,
     analysisMode: stt.provider === "openai" ? "live" : "development_fallback",
-    feedbackSummary: stt.warning ? `${base.feedbackSummary} ${stt.warning}` : base.feedbackSummary
+    feedbackSummary: stt.warning ? `${messageDelivery.feedbackSummary} ${stt.warning}` : messageDelivery.feedbackSummary
   };
   await saveReportToSupabase(report, draft, audioFile.url, audioFile.storagePath, segments).catch((error) => {
     console.warn("Supabase report save failed. Local fallback was kept.", error);
@@ -84,7 +104,8 @@ export async function listRecentReports(): Promise<SpeechReport[]> {
   if (typeof window === "undefined") return [];
   const supabaseReports = await listReportsFromSupabase().catch(() => []);
   if (supabaseReports.length > 0) return supabaseReports;
-  return readLocalReports();
+  const localReports = readLocalReports();
+  return localReports.length > 0 ? localReports : [mockReport];
 }
 
 export async function deleteReport(id: string) {
@@ -111,7 +132,8 @@ export function getDashboardOverview(reports: SpeechReport[]) {
     averageWpm: Math.round(reports.reduce((sum, report) => sum + report.wpm, 0) / Math.max(reports.length, 1)),
     fillerTrend: latest.weeklyTrend.fillerChangePercent,
     clarityScore: latest.clarityScore,
-    structureScore: latest.structureScore
+    structureScore: latest.structureScore,
+    deliveryScore: latest.deliveryScore
   };
 }
 
@@ -368,8 +390,11 @@ function hydrateReport(
     structure: (report.structure_data ?? { intro: "", body: "", conclusion: "", keyMessagePosition: "unclear" }) as SpeechReport["structure"],
     clarityScore: Number(report.clarity_score ?? 0),
     structureScore: Number(report.structure_score ?? 0),
-    deliveryScore: Number(report.delivery_score ?? 0),
-    feedbackSummary: String(report.feedback_summary ?? ""),
+    ...analyzePresentationDelivery({
+      transcript,
+      fallbackSummary: String(report.feedback_summary ?? ""),
+      deliveryScore: Number(report.delivery_score ?? 0)
+    }),
     causeScores: {
       anxiety_pressure: Number(scores.anxiety_pressure_score ?? 0),
       cognitive_load: Number(scores.cognitive_load_score ?? 0),

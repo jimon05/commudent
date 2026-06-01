@@ -11,49 +11,49 @@ export function RecentFeedbackCards({ reports }: { reports: SpeechReport[] }) {
       <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
         <p className="text-xs font-black uppercase tracking-normal text-marine">Next action</p>
         <h2 className="mt-3 text-2xl font-black text-ink">첫 녹음을 시작해보세요.</h2>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">녹음이 쌓이면 말습관, 어휘, 전달력 피드백이 이곳에 자동으로 정리됩니다.</p>
-        <Link href="/record" className="mt-5 inline-flex h-11 items-center rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950">
-          녹음 시작하기
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">발표 기록이 쌓이면 핵심 내용 전달도와 다음 발표 초점이 이곳에 자동으로 정리됩니다.</p>
+        <Link href="/record?mode=prep" className="mt-5 inline-flex h-11 items-center rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950">
+          발표 준비하기
         </Link>
       </section>
     );
   }
 
-  const topFiller = Object.entries(latest.fillerCounts).sort((a, b) => b[1] - a[1])[0];
   const lexical = latest.lexicalReport;
   const genericWords = lexical?.repeatedGenericWords.slice(0, 3).map((item) => item.expression).join("/");
-  const topCause = latest.causeCandidates[0];
   const expressionProvider = latest.sentenceFeedback?.[0]?.source;
   const speedMessage = latest.wpm > 135 ? "말 속도가 평균보다 빠르게 측정되었습니다." : latest.wpm < 85 ? "말 속도가 느리게 측정되어 핵심 전달이 늘어질 수 있습니다." : "말 속도는 비교적 안정적입니다.";
+  const weakSlide = latest.slideDeliveryFeedback?.find((item) => item.status !== "clear");
+  const clearCount = latest.messageResults?.filter((item) => item.status === "clear").length ?? 0;
 
   const cards = [
     {
-      title: "최근 원인 후보",
-      body: topCause ? `${topCause.label} ${topCause.probability}%` : "특정 원인이 강하게 나타나지는 않았습니다.",
-      meta: topCause?.evidence[0] ?? "개선 포인트 중심으로 확인하세요.",
-      cta: "원인 점수 보기",
+      title: "핵심 내용 전달도",
+      body: `이번 발표 전달도 ${latest.deliveryScore}점`,
+      meta: `${clearCount}개 핵심 내용이 명확히 전달됨`,
+      cta: "전달 리포트 보기",
       href: `/report/${latest.id}`
     },
     {
-      title: "최근 반복 표현",
-      body: topFiller && topFiller[1] > 0 ? `이번 녹음에서 '${topFiller[0]}'이 ${topFiller[1]}회 반복되었습니다.` : "두드러진 채움말 반복은 적었습니다.",
-      meta: "채움말을 1초 침묵으로 바꾸는 연습",
-      cta: "대체 표현 보기",
-      href: "/training"
+      title: "보완할 슬라이드",
+      body: weakSlide ? `${weakSlide.slideTitle} 구간 보강 필요` : "슬라이드 핵심 내용이 고르게 전달되었습니다.",
+      meta: weakSlide?.suggestion ?? "다음 발표에서도 슬라이드별 결론을 유지하세요.",
+      cta: "다음 발표 준비",
+      href: "/record?mode=prep"
     },
     {
       title: "어휘 추천",
       body: genericWords ? `${genericWords} 같은 범용 표현이 반복되었습니다.` : lexical?.summary ?? "표현 다양성 데이터가 준비 중입니다.",
       meta: `${providerLabel(expressionProvider)} · ${lexical?.recommendedExpressions.slice(0, 2).join(" · ") || "구체적인 변화"}`,
-      cta: "표현력 훈련하기",
-      href: "/training"
+      cta: "대본 다듬기",
+      href: "/script-coach"
     },
     {
       title: "최근 개선된 점",
       body: speedMessage,
       meta: `현재 WPM ${latest.wpm} · clarity ${latest.clarityScore}`,
-      cta: "속도 훈련 시작",
-      href: "/training"
+      cta: "연습 녹음하기",
+      href: "/record?mode=prep"
     }
   ];
 

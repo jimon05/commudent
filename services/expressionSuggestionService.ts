@@ -93,7 +93,7 @@ function fallbackRewrite(item: ProblematicSentence, contextType: ContextType): S
 }
 
 function toneForContext(contextType: ContextType): SentenceFeedback["tone"] {
-  if (contextType === "presentation" || contextType === "class") return "presentation";
+  if (contextType === "formal" || contextType === "informal" || contextType === "presentation" || contextType === "class") return "presentation";
   if (contextType === "interview") return "interview";
   if (contextType === "meeting") return "meeting";
   return "conversation";

@@ -6,14 +6,14 @@ import { signOut } from "@/services/authService";
 
 const menuItems = [
   { label: "홈", href: "/" },
-  { label: "전체 녹음", href: "/" },
-  { label: "장기 리포트", href: "/long-report" },
-  { label: "스크립트 코칭", href: "/script-coach" },
+  { label: "발표 이력", href: "/" },
+  { label: "발표 전 준비", href: "/record?mode=prep" },
+  { label: "발표 후 녹음", href: "/record?mode=live" },
   { label: "설정", href: "/onboarding" }
 ];
 
 const bottomItems = [
-  { label: "대본 코칭 바로가기", href: "/script-coach" },
+  { label: "다음 발표 준비하기", href: "/record?mode=prep" },
   { label: "개인정보/음성 데이터 관리", href: "/onboarding" }
 ];
 
@@ -31,14 +31,14 @@ export function DashboardSidebar() {
       <aside className="hidden min-h-screen w-[272px] shrink-0 border-r border-white/10 bg-slate-950/92 px-4 py-5 lg:flex lg:flex-col">
         <Link href="/" className="flex items-center gap-3 px-2">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-300 text-sm font-black text-slate-950">C</span>
-          <span>
+            <span>
             <span className="block text-lg font-black text-white">COMMUDENT</span>
-            <span className="block text-xs font-bold text-slate-400">기록 기반 말하기 코칭</span>
+            <span className="block text-xs font-bold text-slate-400">핵심 내용 전달 피드백</span>
           </span>
         </Link>
 
-        <Link href="/record" className="mt-6 flex h-12 items-center justify-center rounded-lg bg-teal-300 px-4 text-sm font-black text-slate-950 shadow-[0_0_24px_rgba(45,212,191,0.18)]">
-          녹음 시작하기
+        <Link href="/record?mode=prep" className="mt-6 flex h-12 items-center justify-center rounded-lg bg-teal-300 px-4 text-sm font-black text-slate-950 shadow-[0_0_24px_rgba(45,212,191,0.18)]">
+          발표 준비 시작
         </Link>
 
         <nav className="mt-7 space-y-1">
@@ -68,11 +68,11 @@ export function DashboardSidebar() {
         <Link href="/" className="rounded-md px-2 py-2 text-center text-xs font-black text-white">
           홈
         </Link>
-        <Link href="/record" className="rounded-md bg-teal-300 px-2 py-2 text-center text-xs font-black text-slate-950">
-          녹음
+        <Link href="/record?mode=prep" className="rounded-md bg-teal-300 px-2 py-2 text-center text-xs font-black text-slate-950">
+          준비
         </Link>
-        <Link href="/script-coach" className="rounded-md px-2 py-2 text-center text-xs font-black text-slate-300">
-          대본
+        <Link href="/record?mode=live" className="rounded-md px-2 py-2 text-center text-xs font-black text-slate-300">
+          녹음
         </Link>
       </nav>
     </>

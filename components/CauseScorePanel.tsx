@@ -8,8 +8,8 @@ const causeOrder: CauseType[] = ["anxiety_pressure", "cognitive_load", "discours
 export function CauseScorePanel({ report }: { report: SpeechReport }) {
   return (
     <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-black text-ink">원인 후보 분석</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">한 개 feature를 한 개 원인으로 단정하지 않고, 여러 지표 조합으로 가능성을 계산합니다.</p>
+      <h2 className="text-lg font-black text-ink">보조 전달 지표</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">이 영역은 핵심 내용 전달을 방해할 수 있는 보조 신호만 참고합니다.</p>
       <div className="mt-4 grid gap-2">
         {causeOrder.map((type) => {
           const score = report.causeScores[type] ?? 0;
@@ -43,7 +43,7 @@ export function CauseScorePanel({ report }: { report: SpeechReport }) {
       </div>
       {report.causeCandidates.length === 0 ? (
         <p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
-          이번 녹음에서는 특정 원인이 강하게 나타나지는 않았습니다. 다만 아래 개선 포인트를 참고해보세요.
+          이번 발표에서는 핵심 내용 전달을 크게 방해하는 보조 신호가 두드러지지 않았습니다.
         </p>
       ) : null}
     </section>
@@ -51,5 +51,5 @@ export function CauseScorePanel({ report }: { report: SpeechReport }) {
 }
 
 function defaultEvidence(type: CauseType) {
-  return [`${causeDefinitions[type].description} 관련 feature 조합이 낮거나 제한적으로 관찰되었습니다.`];
+  return [`${causeDefinitions[type].description} 관련 보조 신호가 낮거나 제한적으로 관찰되었습니다.`];
 }

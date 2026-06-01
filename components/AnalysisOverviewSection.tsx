@@ -1,9 +1,9 @@
 const analysisGroups = [
-  { title: "발화 유창성", metrics: "filler ratio · hesitation · self repair" },
-  { title: "전달 특성", metrics: "WPM · sentence length · clarity" },
-  { title: "구조화", metrics: "PREP · topic drift · key message timing" },
-  { title: "표현력", metrics: "TTR · MTLD · repeated expression" },
-  { title: "상황 정보", metrics: "context · self-check nervousness" }
+  { title: "발표 입력", metrics: "slides · script · time limit" },
+  { title: "핵심 내용 정리", metrics: "slide core · overall core" },
+  { title: "연습 발표", metrics: "recording · STT · transcript" },
+  { title: "전달 확인", metrics: "slide-level · whole presentation" },
+  { title: "다음 준비", metrics: "saved insights · next focus" }
 ];
 
 export function AnalysisOverviewSection() {
@@ -11,10 +11,10 @@ export function AnalysisOverviewSection() {
     <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-normal text-marine">Analysis model</p>
-          <h2 className="mt-2 text-xl font-black text-ink">Commudent는 이렇게 분석합니다</h2>
+          <p className="text-xs font-black uppercase tracking-normal text-marine">Service flow</p>
+          <h2 className="mt-2 text-xl font-black text-ink">Commudent는 발표 준비와 연습 피드백을 이렇게 연결합니다</h2>
         </div>
-        <p className="max-w-lg text-sm font-semibold leading-6 text-slate-500">녹음 기반 feature와 self-check를 함께 보고, 하나의 말습관을 단정하지 않습니다.</p>
+        <p className="max-w-lg text-sm font-semibold leading-6 text-slate-500">사용자가 넣은 슬라이드와 대본에서 핵심 내용을 정리하고, 발표 후 각 슬라이드와 전체 발표가 그 내용을 전달했는지 확인합니다.</p>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {analysisGroups.map((group) => (
@@ -25,9 +25,9 @@ export function AnalysisOverviewSection() {
         ))}
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3 text-[11px] font-black text-slate-400">
-        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">국내 발표불안 연구</span>
-        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">KCI 스피치 교육 연구</span>
-        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">한국스피치커뮤니케이션학회</span>
+        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">슬라이드별 핵심 내용</span>
+        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">전체 발표 전달도</span>
+        <span className="rounded-full border border-line bg-slate-50 px-3 py-1">강조·속도·어휘 보조 피드백</span>
       </div>
     </section>
   );
