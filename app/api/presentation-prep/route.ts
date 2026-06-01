@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createFallbackPrepAnalysis } from "@/services/presentationAnalysisService";
 import type { PresentationPrepAnalysis, SpeechReport } from "@/types/speech";
 
 export const runtime = "nodejs";
@@ -84,12 +85,14 @@ export async function POST(request: Request) {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    return prepErrorResponse("Gemini API 키가 설정되지 않아 발표 준비 분석을 실행할 수 없습니다.", {
+    const details = {
       provider: "gemini",
       model: getGeminiModel(),
       status: 503,
       message: "GEMINI_API_KEY is not configured."
-    });
+    } as const;
+    console.warn("[PresentationPrep] Gemini is not configured. Returning material-backed fallback analysis.", details);
+    return NextResponse.json(createResilientPrepAnalysis({ ...body, slides, script, files }, details.message));
   }
 
   try {
@@ -103,9 +106,9 @@ export async function POST(request: Request) {
         model: getGeminiModel(),
         status: 502,
         message: error instanceof Error ? error.message : "Unknown Gemini presentation prep failure."
-      };
+    };
     console.error("[PresentationPrep] Gemini failed", details);
-    return prepErrorResponse("Gemini 발표 준비 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.", details);
+    return NextResponse.json(createResilientPrepAnalysis({ ...body, slides, script, files }, details.message));
   }
 }
 
@@ -313,6 +316,47 @@ function normalizePrep(value: Partial<PrepAnalysisResponse>): PrepAnalysisRespon
     overallDeliveryGoal: cleanText(value.overallDeliveryGoal),
     slides
   };
+}
+
+function createResilientPrepAnalysis(body: RequestBody & { slides: string; script: string; files: UploadedPrepFile[] }, reason: string): PrepAnalysisResponse & {
+  providerDetails: ProviderDetails;
+} {
+  const fallback = createFallbackPrepAnalysis({
+    script: body.script || uploadedFileSummary(body.files),
+    slides: body.slides || uploadedFileSummary(body.files),
+    priorReports: body.priorReports
+  });
+  const normalized = normalizePrep({
+    ...fallback,
+    cautions: [
+      `Gemini 실시간 분석을 완료하지 못해 입력된 자료와 대본을 기준으로 발표 준비 분석을 생성했습니다. 원인: ${reason}`,
+      ...fallback.cautions
+    ],
+    slides: fallback.slides.map((slide, index) => ({
+      ...slide,
+      index: slide.index || index + 1,
+      title: slide.title || `Slide ${index + 1}`,
+      content: slide.content || slide.expectedMessage,
+      expectedMessage: slide.expectedMessage || fallback.keyMessages[index % fallback.keyMessages.length] || fallback.keyMessages[0],
+      emphasisPoints: slide.emphasisPoints?.length
+        ? slide.emphasisPoints
+        : [slide.expectedMessage || fallback.keyMessages[index % fallback.keyMessages.length] || fallback.keyMessages[0]]
+    }))
+  });
+
+  return {
+    ...normalized,
+    providerDetails: {
+      provider: "gemini",
+      model: getGeminiModel(),
+      status: 200,
+      message: `Resilient fallback returned after Gemini failure: ${reason}`
+    }
+  };
+}
+
+function uploadedFileSummary(files: UploadedPrepFile[]) {
+  return files.map((file, index) => `${index + 1}. ${file.role ?? "자료"}: ${file.name ?? "uploaded-file"} (${file.mimeType ?? "unknown"})`).join("\n");
 }
 
 function cleanList(value: string[] | undefined, min: number, max: number) {
