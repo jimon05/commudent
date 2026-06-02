@@ -17,10 +17,12 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const name = file.name.toLowerCase();
+  const pageCount = countPages(buffer, name);
   const text = extractText(buffer, name).trim();
 
   return NextResponse.json({
     text,
+    pageCount,
     warning: text ? "" : "파일에서 텍스트를 자동 추출하지 못했습니다. 핵심 문장을 입력칸에 붙여넣어 주세요."
   });
 }
@@ -47,6 +49,22 @@ function extractOfficeText(buffer: Buffer, fileName: string) {
 
   const documentEntry = entries.find((entry) => entry.name === "word/document.xml");
   return documentEntry ? officeXmlText(documentEntry.data.toString("utf8")) : "";
+}
+
+function countPages(buffer: Buffer, fileName: string) {
+  if (fileName.endsWith(".pdf")) return countPdfPages(buffer);
+  if (fileName.endsWith(".pptx")) return countPptxSlides(buffer);
+  return 0;
+}
+
+function countPdfPages(buffer: Buffer) {
+  const raw = buffer.toString("latin1");
+  const matches = raw.match(/\/Type\s*\/Page\b/g);
+  return matches?.length ?? 0;
+}
+
+function countPptxSlides(buffer: Buffer) {
+  return readZipEntries(buffer).filter((entry) => /^ppt\/slides\/slide\d+\.xml$/i.test(entry.name)).length;
 }
 
 function readZipEntries(buffer: Buffer): ZipEntry[] {

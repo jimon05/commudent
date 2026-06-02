@@ -125,6 +125,7 @@ export type PresentationSlide = {
   title: string;
   content: string;
   expectedMessage: string;
+  sourcePageNumber?: number;
   emphasisPoints?: string[];
   emphasisPoint?: string;
   paceSuggestion?: string;

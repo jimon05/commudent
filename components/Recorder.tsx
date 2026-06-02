@@ -10,6 +10,7 @@ type PrepStage = "input" | "analyzing" | "ready" | "practice" | "finished";
 
 type FileExtractionResponse = {
   text?: string;
+  pageCount?: number;
   warning?: string;
 };
 
@@ -40,6 +41,8 @@ type RichPrepFields = {
 
 type RichPresentationPrepAnalysis = PresentationPrepAnalysis & RichPrepFields;
 
+type MaterialPreviewKind = "pdf" | "image";
+
 const prepRequestTimeoutMs = 45000;
 const fileExtractionTimeoutMs = 25000;
 const maxInlinePrepFileBytes = 3.5 * 1024 * 1024;
@@ -64,9 +67,45 @@ function splitSlides(slides: string): PresentationSlide[] {
         index: index + 1,
         title: hasTitle ? rawTitle.trim() : `Slide ${index + 1}`,
         content: body,
-        expectedMessage: body.length > 80 ? `${body.slice(0, 80)}...` : body
+        expectedMessage: body.length > 80 ? `${body.slice(0, 80)}...` : body,
+        sourcePageNumber: index + 1
       };
     });
+}
+
+function splitPageMarkedText(text: string) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+  const markerRegex = /(?=(?:^|\n)\s*(?:pg\.?|page|slide)\s*\d+\s*[:.)-]?)/gi;
+  const parts = normalized
+    .split(markerRegex)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parts.length > 1 ? parts : [normalized];
+}
+
+function normalizeExtractedSlidesText(text: string, file: File, pageCount = 0) {
+  const isPdf = /\.pdf$/i.test(file.name) || (file.type || mimeFromFileName(file.name)) === "application/pdf";
+  if (!isPdf) return text.trim();
+
+  const pageTexts = splitPageMarkedText(text);
+  const totalPages = Math.max(pageCount, pageTexts.length, 1);
+  return Array.from({ length: totalPages }, (_, index) => {
+    const pageText = pageTexts[index] ?? "";
+    const cleaned = pageText.replace(/^\s*(?:pg\.?|page|slide)\s*\d+\s*[:.)-]?\s*/i, "").trim();
+    return `Slide ${index + 1}: ${cleaned || `PDF ${index + 1}페이지`}`;
+  }).join("\n");
+}
+
+function getMaterialPreviewKind(file: File): MaterialPreviewKind | null {
+  const mimeType = file.type || mimeFromFileName(file.name);
+  if (mimeType === "application/pdf" || /\.pdf$/i.test(file.name)) return "pdf";
+  if (mimeType.startsWith("image/")) return "image";
+  return null;
+}
+
+function pdfPageSrc(url: string, pageNumber: number) {
+  return `${url}#page=${pageNumber}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
 }
 
 function splitScriptForSlides(script: string, count: number) {
@@ -162,6 +201,9 @@ export function Recorder() {
   const [scriptFilePayload, setScriptFilePayload] = useState<UploadedPrepFile | null>(null);
   const [materialFile, setMaterialFile] = useState<File | null>(null);
   const [scriptFile, setScriptFile] = useState<File | null>(null);
+  const [materialPreviewUrl, setMaterialPreviewUrl] = useState<string | null>(null);
+  const [materialPreviewKind, setMaterialPreviewKind] = useState<MaterialPreviewKind | null>(null);
+  const [materialPageCount, setMaterialPageCount] = useState(0);
   const [prepStage, setPrepStage] = useState<PrepStage>(mode === "live" ? "practice" : "input");
   const [prepAnalysis, setPrepAnalysis] = useState<RichPresentationPrepAnalysis | null>(null);
   const [prepError, setPrepError] = useState("");
@@ -180,12 +222,14 @@ export function Recorder() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const materialPreviewUrlRef = useRef<string | null>(null);
   const contextType: ContextType = formalityLevel >= 50 ? "formal" : "informal";
   const survey = useMemo<PreSpeechSurveyInput>(() => ({ nervousnessScore: 3, preparednessScore: 4, confidenceScore: 3, conditionScore: 4 }), []);
   const selfCheck = useMemo<PostSpeechSelfCheckInput>(() => ({ contextType, nervousnessScore: 3, perceivedDifficulty: "특별한 어려움은 없었다", userNote: "" }), [contextType]);
 
   const preparedSlides = prepAnalysis?.slides ?? [];
   const currentSlide = preparedSlides[currentSlideIndex];
+  const currentSlidePageNumber = Math.max(1, currentSlide?.sourcePageNumber ?? currentSlideIndex + 1);
   const scriptSegments = useMemo(() => splitScriptForSlides(script, Math.max(preparedSlides.length, 1)), [preparedSlides.length, script]);
   const currentTranscript = currentSlide ? slideTranscripts.find((item) => item.slideIndex === currentSlide.index)?.transcript ?? "" : "";
   const isLastSlide = preparedSlides.length > 0 && currentSlideIndex === preparedSlides.length - 1;
@@ -199,6 +243,12 @@ export function Recorder() {
     const timer = window.setInterval(() => setDurationSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [isRecording]);
+
+  useEffect(() => {
+    return () => {
+      if (materialPreviewUrlRef.current) URL.revokeObjectURL(materialPreviewUrlRef.current);
+    };
+  }, []);
 
   function resetPrep() {
     setPrepStage("input");
@@ -221,6 +271,26 @@ export function Recorder() {
     else setScriptFile(file);
   }
 
+  function clearMaterialPreview() {
+    if (materialPreviewUrlRef.current) URL.revokeObjectURL(materialPreviewUrlRef.current);
+    materialPreviewUrlRef.current = null;
+    setMaterialPreviewUrl(null);
+    setMaterialPreviewKind(null);
+    setMaterialPageCount(0);
+  }
+
+  function updateMaterialPreview(file: File | null, pageCount = 0) {
+    clearMaterialPreview();
+    if (!file) return;
+    const kind = getMaterialPreviewKind(file);
+    if (!kind) return;
+    const url = URL.createObjectURL(file);
+    materialPreviewUrlRef.current = url;
+    setMaterialPreviewUrl(url);
+    setMaterialPreviewKind(kind);
+    setMaterialPageCount(pageCount);
+  }
+
   async function readUpload(file: File, target: "slides" | "script") {
     if (target === "slides") setMaterialFileName(file.name);
     else setScriptFileName(file.name);
@@ -228,6 +298,7 @@ export function Recorder() {
     else setScript("");
     setSelectedFile(target, file);
     setFilePayload(target, null);
+    if (target === "slides") updateMaterialPreview(file, 0);
     resetPrep();
     setIsExtractingFile(true);
     const isText = file.type.startsWith("text/") || /\.(txt|md|csv)$/i.test(file.name);
@@ -246,11 +317,15 @@ export function Recorder() {
       const response = await fetchWithTimeout("/api/extract-presentation-file", { method: "POST", body: formData }, fileExtractionTimeoutMs);
       const result = (await response.json()) as FileExtractionResponse;
       const extracted = result.text?.trim();
+      if (target === "slides") updateMaterialPreview(file, result.pageCount ?? 0);
       if (extracted) {
-        if (target === "slides") setSlides(extracted);
+        if (target === "slides") setSlides(normalizeExtractedSlidesText(extracted, file, result.pageCount ?? 0));
         else setScript(extracted);
         setStatusMessage(`${file.name}에서 텍스트를 추출했습니다. 발표 준비하기를 실행하면 이 내용이 분석됩니다.`);
       } else {
+        if (target === "slides" && (result.pageCount ?? 0) > 0) {
+          setSlides(normalizeExtractedSlidesText("", file, result.pageCount ?? 0));
+        }
         setStatusMessage(`${file.name} 텍스트 추출은 비어 있지만, Gemini 분석 요청에 파일 원본을 함께 전달합니다.`);
       }
     } catch (error) {
@@ -370,19 +445,25 @@ export function Recorder() {
     const keyMessages = analysis.keyMessages.slice(0, 3);
     const fallbackSlides = splitSlides(slides);
     const normalizedSlides = analysis.slides.length ? analysis.slides : fallbackSlides;
+    const slideCount = Math.max(normalizedSlides.length, fallbackSlides.length, materialPageCount || 0);
     return {
       ...analysis,
       keyMessages,
       emphasisPoints: analysis.emphasisPoints,
       cautions: analysis.cautions,
       overallDeliveryGoal: analysis.overallDeliveryGoal,
-      slides: normalizedSlides.map((slide, index) => ({
-        index: Number(slide.index || index + 1),
-        title: slide.title || `Slide ${index + 1}`,
-        content: slide.content || slide.expectedMessage || "",
-        expectedMessage: slide.expectedMessage || keyMessages[index % keyMessages.length] || keyMessages[0],
-        emphasisPoints: slide.emphasisPoints?.filter(Boolean)
-      })),
+      slides: Array.from({ length: slideCount }, (_, index) => {
+        const analysisSlide = normalizedSlides[index];
+        const fallbackSlide = fallbackSlides[index];
+        return {
+          index: index + 1,
+          title: fallbackSlide?.title || analysisSlide?.title || `Slide ${index + 1}`,
+          content: fallbackSlide?.content || analysisSlide?.content || analysisSlide?.expectedMessage || "",
+          expectedMessage: analysisSlide?.expectedMessage || fallbackSlide?.expectedMessage || keyMessages[index % keyMessages.length] || keyMessages[0],
+          sourcePageNumber: fallbackSlide?.sourcePageNumber ?? index + 1,
+          emphasisPoints: analysisSlide?.emphasisPoints?.filter(Boolean)
+        };
+      }),
       audienceQuestions: analysis.audienceQuestions?.filter(Boolean),
       rehearsalChecklist: analysis.rehearsalChecklist?.filter(Boolean),
       timingPlan: analysis.timingPlan?.filter(Boolean),
@@ -569,7 +650,7 @@ export function Recorder() {
             </label>
             <label className="block text-sm font-bold text-slate-700">
               발표 자료 텍스트
-              <textarea value={slides} onChange={(event) => { setSlides(event.target.value); setMaterialFile(null); setMaterialFileName(""); setFilePayload("slides", null); resetPrep(); }} rows={7} placeholder="슬라이드 제목과 주요 내용을 붙여넣거나 파일만 업로드해도 됩니다." className="mt-2 w-full rounded-lg border border-line p-3 text-sm leading-6 outline-none focus:border-marine" />
+              <textarea value={slides} onChange={(event) => { setSlides(event.target.value); setMaterialFile(null); setMaterialFileName(""); setFilePayload("slides", null); clearMaterialPreview(); resetPrep(); }} rows={7} placeholder="슬라이드 제목과 주요 내용을 붙여넣거나 파일만 업로드해도 됩니다." className="mt-2 w-full rounded-lg border border-line p-3 text-sm leading-6 outline-none focus:border-marine" />
             </label>
           </div>
           <div className="space-y-4">
@@ -664,21 +745,44 @@ export function Recorder() {
 
           <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-h-[420px] bg-slate-50 p-5">
-              <div className="flex min-h-[360px] flex-col rounded-lg border border-slate-200 bg-white p-8">
-                <p className="text-xs font-black uppercase tracking-normal text-marine">Slide {currentSlide.index}</p>
-                <h3 className="mt-3 text-3xl font-black text-ink">{currentSlide.title}</h3>
-                <p className="mt-6 text-lg font-semibold leading-8 text-slate-600">{currentSlide.content}</p>
-                <div className="mt-auto rounded-lg border border-teal-100 bg-teal-50 p-4">
-                  <p className="text-xs font-black text-marine">이 슬라이드 핵심 메시지</p>
-                  <p className="mt-2 text-sm font-black leading-6 text-ink">{currentSlide.expectedMessage}</p>
-                  {currentSlide.emphasisPoints?.length ? (
-                    <ul className="mt-3 space-y-1">
-                      {currentSlide.emphasisPoints.map((point, index) => (
-                        <li key={`${point}-${index}`} className="text-xs font-bold leading-5 text-slate-600">강조 {index + 1}. {point}</li>
-                      ))}
-                    </ul>
-                  ) : null}
+              {materialPreviewUrl && materialPreviewKind ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-950 p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+                    <p className="text-xs font-black uppercase tracking-normal text-teal-300">Slide {currentSlide.index}</p>
+                    <p className="text-xs font-black text-slate-300">
+                      {materialPreviewKind === "pdf" ? `PDF ${currentSlidePageNumber}페이지` : "업로드 이미지"}
+                    </p>
+                  </div>
+                  {materialPreviewKind === "pdf" ? (
+                    <iframe
+                      key={`${materialPreviewUrl}-${currentSlidePageNumber}`}
+                      title={`${currentSlide.title} preview`}
+                      src={pdfPageSrc(materialPreviewUrl, currentSlidePageNumber)}
+                      className="h-[58vh] min-h-[460px] w-full rounded-md border-0 bg-white"
+                    />
+                  ) : (
+                    <div className="flex h-[58vh] min-h-[460px] items-center justify-center overflow-hidden rounded-md bg-white">
+                      <img src={materialPreviewUrl} alt={`${currentSlide.title} preview`} className="max-h-full max-w-full object-contain" />
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <div className="flex min-h-[360px] flex-col rounded-lg border border-slate-200 bg-white p-8">
+                  <p className="text-xs font-black uppercase tracking-normal text-marine">Slide {currentSlide.index}</p>
+                  <h3 className="mt-3 text-3xl font-black text-ink">{currentSlide.title}</h3>
+                  <p className="mt-6 text-lg font-semibold leading-8 text-slate-600">{currentSlide.content}</p>
+                </div>
+              )}
+              <div className="mt-4 rounded-lg border border-teal-100 bg-teal-50 p-4">
+                <p className="text-xs font-black text-marine">이 슬라이드 핵심 메시지</p>
+                <p className="mt-2 text-sm font-black leading-6 text-ink">{currentSlide.expectedMessage}</p>
+                {currentSlide.emphasisPoints?.length ? (
+                  <ul className="mt-3 space-y-1">
+                    {currentSlide.emphasisPoints.map((point, index) => (
+                      <li key={`${point}-${index}`} className="text-xs font-bold leading-5 text-slate-600">강조 {index + 1}. {point}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <button type="button" onClick={() => moveSlide(currentSlideIndex - 1)} disabled={currentSlideIndex === 0} className="h-10 rounded-lg border border-line bg-white px-4 text-sm font-black text-slate-600 disabled:opacity-40">이전 슬라이드</button>
