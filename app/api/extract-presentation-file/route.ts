@@ -59,8 +59,28 @@ function countPages(buffer: Buffer, fileName: string) {
 
 function countPdfPages(buffer: Buffer) {
   const raw = buffer.toString("latin1");
-  const matches = raw.match(/\/Type\s*\/Page\b/g);
-  return matches?.length ?? 0;
+  const streamTexts: string[] = [];
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = streamRegex.exec(raw)) !== null) {
+    const inflated = tryInflate(Buffer.from(match[1], "latin1"));
+    if (inflated) streamTexts.push(inflated.toString("latin1"));
+  }
+
+  return Math.max(...[raw, ...streamTexts].map(countPdfPagesInSource), 0);
+}
+
+function countPdfPagesInSource(source: string) {
+  const explicitPages = source.match(/\/Type\s*\/Page\b/g)?.length ?? 0;
+  const pagesTreeCounts = [...source.matchAll(/\/Type\s*\/Pages\b[\s\S]{0,800}?\/Count\s+(\d+)/g)]
+    .map((item) => Number(item[1]))
+    .filter(Number.isFinite);
+  const broadCounts = [...source.matchAll(/\/Count\s+(\d+)/g)]
+    .map((item) => Number(item[1]))
+    .filter((value) => Number.isFinite(value) && value > 0 && value < 1000);
+
+  return Math.max(explicitPages, ...pagesTreeCounts, ...broadCounts, 0);
 }
 
 function countPptxSlides(buffer: Buffer) {

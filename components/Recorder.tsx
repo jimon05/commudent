@@ -97,6 +97,26 @@ function normalizeExtractedSlidesText(text: string, file: File, pageCount = 0) {
   }).join("\n");
 }
 
+function countPdfPagesFromSource(source: string) {
+  const explicitPages = source.match(/\/Type\s*\/Page\b/g)?.length ?? 0;
+  const pagesTreeCounts = [...source.matchAll(/\/Type\s*\/Pages\b[\s\S]{0,800}?\/Count\s+(\d+)/g)]
+    .map((item) => Number(item[1]))
+    .filter(Number.isFinite);
+  const broadCounts = [...source.matchAll(/\/Count\s+(\d+)/g)]
+    .map((item) => Number(item[1]))
+    .filter((value) => Number.isFinite(value) && value > 0 && value < 1000);
+
+  return Math.max(explicitPages, ...pagesTreeCounts, ...broadCounts, 0);
+}
+
+async function countPdfPagesInBrowser(file: File) {
+  const mimeType = file.type || mimeFromFileName(file.name);
+  if (mimeType !== "application/pdf" && !/\.pdf$/i.test(file.name)) return 0;
+  const bytes = await file.arrayBuffer();
+  const source = new TextDecoder("latin1").decode(bytes);
+  return countPdfPagesFromSource(source);
+}
+
 function getMaterialPreviewKind(file: File): MaterialPreviewKind | null {
   const mimeType = file.type || mimeFromFileName(file.name);
   if (mimeType === "application/pdf" || /\.pdf$/i.test(file.name)) return "pdf";
@@ -303,6 +323,8 @@ export function Recorder() {
     setIsExtractingFile(true);
     const isText = file.type.startsWith("text/") || /\.(txt|md|csv)$/i.test(file.name);
     try {
+      const browserPageCount = target === "slides" ? await countPdfPagesInBrowser(file) : 0;
+      if (target === "slides" && browserPageCount > 0) updateMaterialPreview(file, browserPageCount);
       if (isText) {
         const text = await file.text();
         if (target === "slides") setSlides(text.trim());
@@ -317,14 +339,15 @@ export function Recorder() {
       const response = await fetchWithTimeout("/api/extract-presentation-file", { method: "POST", body: formData }, fileExtractionTimeoutMs);
       const result = (await response.json()) as FileExtractionResponse;
       const extracted = result.text?.trim();
-      if (target === "slides") updateMaterialPreview(file, result.pageCount ?? 0);
+      const pageCount = Math.max(result.pageCount ?? 0, browserPageCount);
+      if (target === "slides") updateMaterialPreview(file, pageCount);
       if (extracted) {
-        if (target === "slides") setSlides(normalizeExtractedSlidesText(extracted, file, result.pageCount ?? 0));
+        if (target === "slides") setSlides(normalizeExtractedSlidesText(extracted, file, pageCount));
         else setScript(extracted);
         setStatusMessage(`${file.name}에서 텍스트를 추출했습니다. 발표 준비하기를 실행하면 이 내용이 분석됩니다.`);
       } else {
-        if (target === "slides" && (result.pageCount ?? 0) > 0) {
-          setSlides(normalizeExtractedSlidesText("", file, result.pageCount ?? 0));
+        if (target === "slides" && pageCount > 0) {
+          setSlides(normalizeExtractedSlidesText("", file, pageCount));
         }
         setStatusMessage(`${file.name} 텍스트 추출은 비어 있지만, Gemini 분석 요청에 파일 원본을 함께 전달합니다.`);
       }
