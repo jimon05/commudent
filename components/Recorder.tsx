@@ -282,7 +282,7 @@ export function Recorder() {
     setPrepError("");
     setStatusMessage("AI가 발표 자료와 대본을 분석하고 있습니다.");
     try {
-      const priorReports = await listRecentReports().catch(() => []);
+      const priorReports = (await listRecentReports().catch(() => [])).filter((report) => report.id !== "demo-report" && report.recordingId !== "demo-recording");
       const formData = new FormData();
       formData.append("title", title);
       formData.append("slides", slides);

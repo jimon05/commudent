@@ -216,7 +216,7 @@ async function generateWithGeminiModel(body: RequestBody & { slides: string; scr
     throw new GeminiPrepError("Gemini returned an empty presentation prep response.", { model, status: 502 });
   }
 
-  return parseGeminiPrepResponse(text, model);
+  return mergeWithInputSlides(parseGeminiPrepResponse(text, model), body.slides);
 }
 
 async function readGeminiPayload(response: Response): Promise<GeminiResponse> {
@@ -242,25 +242,27 @@ function buildPrompt(body: RequestBody & { slides: string; script: string; files
   const fileSummary = body.files.map((file, index) => `${index + 1}. ${file.role ?? "자료"} file: ${file.name} (${file.mimeType})`).join("\n") || "첨부 파일 없음";
   return [
     "너는 Commudent의 발표 전달력 코치다.",
-    "목표는 발표자의 발화 습관을 일반적으로 평가하는 것이 아니라, 청중이 실제로 기억해야 할 메시지가 슬라이드와 대본에서 선명하게 전달되는지 분석하는 것이다.",
-    "반드시 Gemini가 직접 분석한 결과만 작성한다. 자료가 부족하더라도 가짜 예시나 fallback 문구를 만들지 말고 입력 근거에 기반해 구체적으로 판단한다.",
+    "목표는 발표 자료 전체와 발표 대본 전체를 이해한 뒤, 청중이 기억해야 할 요지와 그 요지를 말로 전달하는 방법을 구체적으로 코칭하는 것이다.",
+    "절대 이전 발표 예시, 데모 데이터, 일반적인 고정 문구를 답하지 않는다. 입력된 slides_text와 script_text에 직접 등장하는 내용만 근거로 삼는다.",
     "아래 발표 자료, 대본, 첨부 파일을 함께 읽고, 리허설 전에 발표자가 바로 수정하거나 의식할 수 있는 분석을 제공한다.",
     "텍스트 입력이 비어 있어도 첨부 파일이 있으면 첨부 파일 내용을 직접 읽고 분석한다.",
     "발표 자료 또는 대본 중 하나만 제공된 경우에도 제공된 근거 안에서 발표 핵심 메시지와 연습 유의사항을 생성한다.",
     "",
     "반드시 포함할 항목:",
-    "1. keyMessages: 청중이 발표 후 기억해야 할 핵심 메시지 정확히 3개",
+    "1. keyMessages: 발표 자료와 대본 전체를 모두 이해한 뒤, 청중이 발표 후 기억해야 할 핵심 요지 정확히 3개. 단순 문장 복사가 아니라 전체 내용을 압축한 요지여야 한다.",
     "2. overallDeliveryGoal: 발표 전체의 전달 목표 1문장",
-    "3. emphasisPoints: 발표 전체에서 강하게 강조해야 할 포인트 3~5개",
+    "3. emphasisPoints: 발표 대본에서 핵심 요지와 관련된 실제 문장이나 표현을 인용하거나 요약한 뒤, 그 문장을 어떻게 말해야 전달이 좋아지는지 3~5개로 코칭한다. 예: \"OOO\" 사례는 중요한 근거이므로 이목을 집중시킨 뒤 천천히 말하세요.",
     "4. cautions: 리허설 전에 반드시 확인할 구체적 유의점 3~5개. 추상적인 조언 대신 입력 자료의 누락, 논리 비약, 시간 배분, 강조 위치, 청중 오해 가능성을 짚는다.",
     "5. slides: 슬라이드별 index, title, content, expectedMessage, emphasisPoints",
     "6. slides[].expectedMessage: 해당 슬라이드에서 청중이 기억해야 할 기대 메시지 1문장",
-    "7. slides[].emphasisPoints: 해당 슬라이드에서 말로 강조해야 할 포인트 1~3개",
+    "7. slides[].content: 입력된 발표 자료의 해당 슬라이드 내용을 보존해서 요약한다. 없는 내용을 새로 만들지 않는다.",
+    "8. slides[].emphasisPoints: 해당 슬라이드와 관련된 대본 문장을 어떻게 말해야 하는지 1~3개로 코칭한다. 가능하면 대본 표현을 따옴표로 포함한다.",
     "",
     "작성 규칙:",
     "- keyMessages는 정확히 3개만 작성한다.",
     "- slides는 입력 발표 자료의 순서를 유지한다.",
     "- expectedMessage와 emphasisPoints는 서로 중복 문구를 피하고, 발표자가 실제로 말할 수 있게 구체적으로 쓴다.",
+    "- 강조 포인트에는 '결론은 반복하세요', '천천히 말하세요' 같은 일반론만 쓰지 말고 반드시 입력 자료나 대본의 특정 내용과 연결한다.",
     "- 과거 발표 기록이 있으면 반복되는 전달력 문제를 cautions와 emphasisPoints에 반영한다.",
     "- 출력은 지정된 JSON schema에 맞는 JSON만 반환한다.",
     "",
@@ -333,6 +335,52 @@ function normalizePrep(value: Partial<PrepAnalysisResponse>): PrepAnalysisRespon
   };
 }
 
+function mergeWithInputSlides<T extends PrepAnalysisResponse>(analysis: T, inputSlidesText: string): T {
+  const inputSlides = parseInputSlides(inputSlidesText);
+  if (!inputSlides.length) return analysis;
+  return {
+    ...analysis,
+    slides: inputSlides.map((inputSlide, index) => {
+      const aiSlide = analysis.slides[index];
+      return {
+        index: inputSlide.index,
+        title: inputSlide.title,
+        content: inputSlide.content,
+        expectedMessage: cleanText(aiSlide?.expectedMessage) || inputSlide.expectedMessage,
+        emphasisPoints: aiSlide?.emphasisPoints?.length ? aiSlide.emphasisPoints : [inputSlide.expectedMessage]
+      };
+    })
+  };
+}
+
+function parseInputSlides(slides: string): SlidePrepAnalysis[] {
+  const cleaned = cleanInputMaterial(slides);
+  if (!cleaned) return [];
+  const chunks = cleaned
+    .split(/\n(?=\s*(?:slide|슬라이드)?\s*\d+[\).:-]?\s+|\s*\d+[\).:-]\s*)/i)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const source = chunks.length > 1 ? chunks : cleaned.split(/\n{2,}/).map((chunk) => chunk.trim()).filter(Boolean);
+
+  return source.map((chunk, index) => {
+    const lines = chunk.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+    const first = lines[0] ?? `Slide ${index + 1}`;
+    const withoutPrefix = first.replace(/^(?:slide|슬라이드)?\s*\d+[\).:-]?\s*/i, "").trim();
+    const [titlePart, ...restTitle] = withoutPrefix.split(":");
+    const hasColonTitle = restTitle.length > 0 && titlePart.length <= 36;
+    const title = hasColonTitle ? titlePart.trim() : withoutPrefix || `Slide ${index + 1}`;
+    const firstBody = hasColonTitle ? restTitle.join(":").trim() : "";
+    const content = [firstBody, ...lines.slice(1)].filter(Boolean).join("\n").trim() || title;
+    return {
+      index: index + 1,
+      title,
+      content,
+      expectedMessage: content.length > 120 ? `${content.slice(0, 120)}...` : content,
+      emphasisPoints: []
+    };
+  });
+}
+
 function createResilientPrepAnalysis(body: RequestBody & { slides: string; script: string; files: UploadedPrepFile[] }, reason: string): PrepAnalysisResponse & {
   providerDetails: ProviderDetails;
 } {
@@ -356,7 +404,7 @@ function createResilientPrepAnalysis(body: RequestBody & { slides: string; scrip
     }))
   });
 
-  return {
+  return mergeWithInputSlides({
     ...normalized,
     providerDetails: {
       provider: "gemini",
@@ -364,7 +412,7 @@ function createResilientPrepAnalysis(body: RequestBody & { slides: string; scrip
       status: 200,
       message: `Resilient fallback returned after Gemini failure: ${reason}`
     }
-  };
+  }, body.slides);
 }
 
 function uploadedFileSummary(files: UploadedPrepFile[]) {
@@ -391,7 +439,9 @@ function cleanInputMaterial(value: unknown) {
   return trimmed
     .replace(/<[^>]+>/g, " ")
     .replace(/\b(?:w|a|r|wp|mc|o|v):[A-Za-z0-9]+(?:=\"[^\"]*\")?/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
