@@ -4,7 +4,7 @@ import type { PresentationPrepAnalysis, SpeechReport } from "@/types/speech";
 
 export const runtime = "nodejs";
 
-const geminiRequestTimeoutMs = 18000;
+const geminiRequestTimeoutMs = 35000;
 
 type RequestBody = {
   title?: string;
@@ -140,7 +140,7 @@ async function readRequestBody(request: Request): Promise<RequestBody> {
     script: String(formData.get("script") ?? ""),
     timeLimit: Number(formData.get("timeLimit") ?? 0) || undefined,
     formalityLevel: Number(formData.get("formalityLevel") ?? 50),
-    priorReports: JSON.parse(priorReportsRaw) as RequestBody["priorReports"],
+    priorReports: safeParsePriorReports(priorReportsRaw),
     files
   };
 }
@@ -202,7 +202,7 @@ async function generateWithGeminiModel(body: RequestBody & { slides: string; scr
       }
     })
   }).finally(() => clearTimeout(timer));
-  const payload = (await response.json()) as GeminiResponse;
+  const payload = await readGeminiPayload(response);
   if (!response.ok) {
     throw new GeminiPrepError(payload.error?.message ?? "Gemini presentation prep request failed.", {
       model,
@@ -220,6 +220,25 @@ async function generateWithGeminiModel(body: RequestBody & { slides: string; scr
     return normalizePrep(JSON.parse(extractJson(text)) as Partial<PrepAnalysisResponse>);
   } catch (error) {
     throw new GeminiPrepError(error instanceof Error ? error.message : "Gemini returned invalid JSON.", { model, status: 502 });
+  }
+}
+
+async function readGeminiPayload(response: Response): Promise<GeminiResponse> {
+  const text = await response.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text) as GeminiResponse;
+  } catch {
+    return { error: { message: text.slice(0, 800) } };
+  }
+}
+
+function safeParsePriorReports(value: string): RequestBody["priorReports"] {
+  try {
+    const parsed = JSON.parse(value) as RequestBody["priorReports"];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 

@@ -42,6 +42,7 @@ type RichPresentationPrepAnalysis = PresentationPrepAnalysis & RichPrepFields;
 
 const prepRequestTimeoutMs = 45000;
 const fileExtractionTimeoutMs = 25000;
+const maxInlinePrepFileBytes = 3.5 * 1024 * 1024;
 
 function formatSeconds(seconds: number) {
   const minute = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -100,6 +101,39 @@ function readPrepApiError(value: unknown) {
   if (!detail) return message;
   const compactDetail = detail.split("\n").slice(0, 3).join("\n");
   return `${message}\n\nGemini ${model ?? ""}${status ? ` (${status})` : ""}: ${compactDetail}`.trim();
+}
+
+async function readJsonOrText(response: Response) {
+  const text = await response.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return {
+      error: `AI 발표 준비 API 요청에 실패했습니다. HTTP ${response.status} 응답이 JSON 형식이 아닙니다.`,
+      providerDetails: {
+        status: response.status,
+        message: text.slice(0, 600)
+      }
+    };
+  }
+}
+
+function canSendInlineToPrepApi(file: File | null, extractedText: string) {
+  if (!file || extractedText.trim()) return false;
+  const mimeType = file.type || mimeFromFileName(file.name);
+  const supported = mimeType === "application/pdf" || mimeType.startsWith("image/") || mimeType.startsWith("text/");
+  return supported && file.size <= maxInlinePrepFileBytes;
+}
+
+function mimeFromFileName(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".csv")) return "text/plain";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "application/octet-stream";
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit | undefined, timeoutMs: number) {
@@ -261,8 +295,8 @@ export function Recorder() {
         slideDeliveryFeedback: report.slideDeliveryFeedback,
         messageResults: report.messageResults
       }))));
-      if (materialFile) formData.append("slidesFile", materialFile);
-      if (scriptFile) formData.append("scriptFile", scriptFile);
+      if (canSendInlineToPrepApi(materialFile, slides)) formData.append("slidesFile", materialFile as File);
+      if (canSendInlineToPrepApi(scriptFile, script)) formData.append("scriptFile", scriptFile as File);
       [materialFilePayload, scriptFilePayload].filter(Boolean).forEach((file) => {
         formData.append("files", JSON.stringify(file));
       });
@@ -271,7 +305,7 @@ export function Recorder() {
         method: "POST",
         body: formData
       }, prepRequestTimeoutMs);
-      const payload: unknown = await response.json().catch(() => null);
+      const payload = await readJsonOrText(response);
       if (!response.ok) throw new Error(readPrepApiError(payload));
 
       const analysis = parsePrepAnalysis(payload);
