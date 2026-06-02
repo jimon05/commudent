@@ -46,7 +46,7 @@ function extractOfficeText(buffer: Buffer, fileName: string) {
   }
 
   const documentEntry = entries.find((entry) => entry.name === "word/document.xml");
-  return documentEntry ? xmlText(documentEntry.data.toString("utf8")) : "";
+  return documentEntry ? officeXmlText(documentEntry.data.toString("utf8")) : "";
 }
 
 function readZipEntries(buffer: Buffer): ZipEntry[] {
@@ -128,9 +128,20 @@ function decodePdfText(value: string) {
 }
 
 function xmlText(value: string) {
-  const matches = [...value.matchAll(/<[^:>]*:?t[^>]*>([\s\S]*?)<\/[^:>]*:?t>/g)];
-  const text = matches.length ? matches.map((match) => decodeXml(match[1])).join(" ") : value.replace(/<[^>]+>/g, " ");
-  return text.replace(/\s+/g, " ").trim();
+  return officeXmlText(value);
+}
+
+function officeXmlText(value: string) {
+  const paragraphs = value
+    .split(/<\/(?:w:p|a:p)>/i)
+    .map((paragraph) => {
+      const textNodes = [...paragraph.matchAll(/<((?:w|a):t)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
+      return textNodes.map((match) => decodeXml(match[2])).join("");
+    })
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  return paragraphs.join("\n").trim();
 }
 
 function decodeXml(value: string) {

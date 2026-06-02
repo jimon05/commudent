@@ -71,8 +71,8 @@ export async function POST(request: Request) {
     });
   }
 
-  const script = body.script?.trim() ?? "";
-  const slides = body.slides?.trim() ?? "";
+  const script = cleanInputMaterial(body.script);
+  const slides = cleanInputMaterial(body.slides);
   const files = sanitizeUploadedFiles(body.files);
 
   if (!slides && !script && files.length === 0) {
@@ -377,7 +377,44 @@ function cleanList(value: string[] | undefined, min: number, max: number) {
 }
 
 function cleanText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? cleanInputMaterial(value) : "";
+}
+
+function cleanInputMaterial(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const officeText = extractOfficeTextFromXml(trimmed);
+  if (officeText) return officeText;
+
+  return trimmed
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\b(?:w|a|r|wp|mc|o|v):[A-Za-z0-9]+(?:=\"[^\"]*\")?/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractOfficeTextFromXml(value: string) {
+  if (!/<(?:w|a):t\b/i.test(value)) return "";
+  const paragraphs = value
+    .split(/<\/(?:w:p|a:p)>/i)
+    .map((paragraph) => {
+      const textNodes = [...paragraph.matchAll(/<((?:w|a):t)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
+      return textNodes.map((match) => decodeXml(match[2])).join("");
+    })
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  return paragraphs.join("\n").trim();
+}
+
+function decodeXml(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'");
 }
 
 function sanitizeUploadedFiles(files: UploadedPrepFile[] | undefined) {
