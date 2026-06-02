@@ -216,11 +216,7 @@ async function generateWithGeminiModel(body: RequestBody & { slides: string; scr
     throw new GeminiPrepError("Gemini returned an empty presentation prep response.", { model, status: 502 });
   }
 
-  try {
-    return normalizePrep(JSON.parse(extractJson(text)) as Partial<PrepAnalysisResponse>);
-  } catch (error) {
-    throw new GeminiPrepError(error instanceof Error ? error.message : "Gemini returned invalid JSON.", { model, status: 502 });
-  }
+  return parseGeminiPrepResponse(text, model);
 }
 
 async function readGeminiPayload(response: Response): Promise<GeminiResponse> {
@@ -347,10 +343,7 @@ function createResilientPrepAnalysis(body: RequestBody & { slides: string; scrip
   });
   const normalized = normalizePrep({
     ...fallback,
-    cautions: [
-      `Gemini 실시간 분석을 완료하지 못해 입력된 자료와 대본을 기준으로 발표 준비 분석을 생성했습니다. 원인: ${reason}`,
-      ...fallback.cautions
-    ],
+    cautions: fallback.cautions,
     slides: fallback.slides.map((slide, index) => ({
       ...slide,
       index: slide.index || index + 1,
@@ -418,6 +411,124 @@ function extractJson(value: string) {
   const end = stripped.lastIndexOf("}");
   if (start >= 0 && end > start) return stripped.slice(start, end + 1);
   return stripped;
+}
+
+function parseGeminiPrepResponse(text: string, model: string): PrepAnalysisResponse {
+  const jsonText = extractJson(text);
+  const attempts = [
+    jsonText,
+    escapeControlCharactersInJsonStrings(jsonText),
+    removeTrailingCommas(escapeControlCharactersInJsonStrings(jsonText))
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      return normalizePrep(JSON.parse(attempt) as Partial<PrepAnalysisResponse>);
+    } catch {
+      // Try the next repair strategy.
+    }
+  }
+
+  const partial = recoverPrepFromMalformedJson(jsonText);
+  if (partial) return normalizePrep(partial);
+
+  try {
+    return normalizePrep(JSON.parse(jsonText) as Partial<PrepAnalysisResponse>);
+  } catch (error) {
+    throw new GeminiPrepError(error instanceof Error ? error.message : "Gemini returned invalid JSON.", { model, status: 502 });
+  }
+}
+
+function escapeControlCharactersInJsonStrings(value: string) {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+
+  for (const char of value) {
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      output += char;
+      escaped = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      output += char;
+      continue;
+    }
+    if (inString && char === "\n") {
+      output += "\\n";
+      continue;
+    }
+    if (inString && char === "\r") {
+      output += "\\r";
+      continue;
+    }
+    if (inString && char === "\t") {
+      output += "\\t";
+      continue;
+    }
+    output += char;
+  }
+
+  return output;
+}
+
+function removeTrailingCommas(value: string) {
+  return value.replace(/,\s*([}\]])/g, "$1");
+}
+
+function recoverPrepFromMalformedJson(value: string): Partial<PrepAnalysisResponse> | null {
+  const keyMessages = extractStringArrayField(value, "keyMessages", 3);
+  const emphasisPoints = extractStringArrayField(value, "emphasisPoints", 5);
+  const cautions = extractStringArrayField(value, "cautions", 5);
+  const overallDeliveryGoal = extractStringField(value, "overallDeliveryGoal");
+  const slides = extractSlides(value);
+  if (keyMessages.length < 3 || !overallDeliveryGoal || slides.length === 0) return null;
+  return { keyMessages, emphasisPoints, cautions, overallDeliveryGoal, slides };
+}
+
+function extractStringField(value: string, field: string) {
+  const match = value.match(new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`));
+  return cleanRecoveredText(match?.[1] ?? "");
+}
+
+function extractStringArrayField(value: string, field: string, max: number) {
+  const arrayBody = value.match(new RegExp(`"${field}"\\s*:\\s*\\[([\\s\\S]*?)\\]`))?.[1] ?? "";
+  return [...arrayBody.matchAll(/"([\s\S]*?)(?:"\s*,|"(?=\s*$)|$)/g)]
+    .map((match) => cleanRecoveredText(match[1]))
+    .filter(Boolean)
+    .slice(0, max);
+}
+
+function extractSlides(value: string): SlidePrepAnalysis[] {
+  const slidesBody = value.match(/"slides"\s*:\s*\[([\s\S]*)\]\s*}?$/)?.[1] ?? "";
+  const objectMatches = [...slidesBody.matchAll(/\{([\s\S]*?)(?=\}\s*,\s*\{|\}\s*$)/g)];
+  return objectMatches.map((match, index) => {
+    const objectText = match[1];
+    const expectedMessage = extractStringField(objectText, "expectedMessage");
+    return {
+      index: Number(objectText.match(/"index"\s*:\s*(\d+)/)?.[1] ?? index + 1),
+      title: extractStringField(objectText, "title") || `Slide ${index + 1}`,
+      content: extractStringField(objectText, "content") || expectedMessage,
+      expectedMessage,
+      emphasisPoints: extractStringArrayField(objectText, "emphasisPoints", 3)
+    };
+  }).filter((slide) => slide.expectedMessage && slide.emphasisPoints.length);
+}
+
+function cleanRecoveredText(value: string) {
+  return value
+    .replace(/\\"/g, "\"")
+    .replace(/\\n/g, " ")
+    .replace(/\\r/g, " ")
+    .replace(/\\t/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getGeminiModel() {
